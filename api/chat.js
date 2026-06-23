@@ -1,45 +1,54 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Gemini :contentReference[oaicite:0]{index=0}
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const model = genAI.getGenerativeModel({
   model: "gemini-3.1-flash-lite",
 });
 
-// =====================
-// STATIC KNOWLEDGE (TEMP FIX)
-// =====================
-// 👉 Put your PDF text manually here (for now)
-const PDF_TEXT = `
-KREHSST HR POLICY
+// ✅ YOUR REAL HR KNOWLEDGE (FROM YOUR NOTION PDFS)
+const HR_KNOWLEDGE = `
+WFH Policy:
+Employees can work from home 2 days per week with manager approval.
+
+Hybrid Work Policy:
+3 days office + 2 days remote.
 
 Holiday List:
-- 1 Jan: New Year
-- 26 Jan: Republic Day
-- 15 Aug: Independence Day
+1 Jan - New Year
+26 Jan - Republic Day
+15 Aug - Independence Day
 
-Paid Leave: 18 days per year
-Sick Leave: 10 days per year
-Casual Leave: 6 days per year
+Offer Management Process:
+1. HR raises offer request
+2. Manager approval
+3. Salary validation
+4. Offer letter generation
+5. Candidate acceptance tracking
+
+End-to-End Recruitment Process:
+1. Requirement gathering
+2. JD approval
+3. Sourcing
+4. Interview rounds
+5. Final selection
+6. Offer rollout
 `;
 
 export default async function handler(req, res) {
   try {
     const { message } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ answer: "No message provided" });
-    }
-
     const prompt = `
-You are an HR assistant.
+You are HR assistant.
 
 RULES:
-- Use ONLY the HR policy below
-- If answer not present, say "Not found in policy"
+- Use ONLY the knowledge below
+- If not found, say "Not found in HR policy"
 
 HR DATA:
-${PDF_TEXT}
+${HR_KNOWLEDGE}
 
 QUESTION:
 ${message}
@@ -54,7 +63,7 @@ ${message}
 
   } catch (error) {
     return res.status(200).json({
-      answer: "Error: " + error.message,
+      answer: error.message,
     });
   }
 }
