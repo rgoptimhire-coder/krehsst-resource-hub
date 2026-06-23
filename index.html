@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>KREHSST Assistant</title>
+</head>
+<body>
+
+<h2>KREHSST Resource Hub</h2>
+
+<input id="q" placeholder="Ask..." style="width:300px;">
+<button onclick="ask()">Ask</button>
+
+<p id="out"></p>
+
+<script>
+async function ask() {
+  const message = document.getElementById("q").value;
+
+  document.getElementById("out").innerText = "Thinking...";
+
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ message })
+  });
+
+  const data = await res.json();
+
+  document.getElementById("out").innerText = data.answer;
+}
+</script>
+
+</body>
+</html>
