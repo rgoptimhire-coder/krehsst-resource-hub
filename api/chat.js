@@ -1,53 +1,74 @@
 import { Client } from "@notionhq/client";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import pdf from "pdf-parse";
 
+// Notion
 const notion = new Client({
   auth: process.env.NOTION_TOKEN,
 });
 
+// Gemini :contentReference[oaicite:1]{index=1}
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const model = genAI.getGenerativeModel({
   model: "gemini-3.1-flash-lite",
 });
 
-const PAGE_ID = process.env.NOTION_PAGE_ID;
+// =====================
+// DOWNLOAD + EXTRACT PDF
+// =====================
+async function extractPDF(url) {
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  const data = await pdf(Buffer.from(buffer));
+  return data.text;
+}
 
-async function getNotionText() {
+// =====================
+// GET PDF FROM NOTION PAGE
+// =====================
+async function getPDFTextFromNotion() {
   const blocks = await notion.blocks.children.list({
-    block_id: PAGE_ID,
+    block_id: process.env.NOTION_PAGE_ID,
   });
 
   let text = "";
 
-  blocks.results.forEach((block) => {
-    if (block.type === "paragraph") {
-      text += block.paragraph.rich_text.map(t => t.plain_text).join("") + "\n";
+  for (const block of blocks.results) {
+
+    // PDF FILE BLOCK
+    if (block.type === "file") {
+      const fileUrl = block.file?.file?.url || block.file?.url;
+
+      if (fileUrl) {
+        try {
+          const pdfText = await extractPDF(fileUrl);
+          text += pdfText + "\n";
+        } catch (err) {
+          console.log("PDF error:", err.message);
+        }
+      }
     }
-    if (block.type === "heading_1") {
-      text += block.heading_1.rich_text.map(t => t.plain_text).join("") + "\n";
-    }
-    if (block.type === "heading_2") {
-      text += block.heading_2.rich_text.map(t => t.plain_text).join("") + "\n";
-    }
-    if (block.type === "bulleted_list_item") {
-      text += "- " + block.bulleted_list_item.rich_text.map(t => t.plain_text).join("") + "\n";
-    }
-  });
+
+  }
 
   return text;
 }
 
+// =====================
+// MAIN API
+// =====================
 export default async function handler(req, res) {
   try {
     const { message } = req.body;
 
-    const context = await getNotionText();
+    // STEP 1: ONLY PDF TEXT
+    const context = await getPDFTextFromNotion();
 
     const prompt = `
 You are HR assistant.
 
-Only use this data:
+Use ONLY this PDF content:
 
 ${context}
 
