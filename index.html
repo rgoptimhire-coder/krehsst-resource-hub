@@ -21,7 +21,7 @@ body {
   color: #1f2937;
 }
 
-/* Sidebar Styling */
+/* Sidebar Styles */
 .sidebar {
   width: 260px;
   background: #111827;
@@ -29,7 +29,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: 20px 15px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease-out;
   flex-shrink: 0;
   z-index: 100;
 }
@@ -59,7 +59,6 @@ body {
   cursor: pointer;
   padding: 5px 8px;
   border-radius: 6px;
-  transition: background 0.2s;
 }
 
 .sidebar-toggle-btn:hover {
@@ -75,7 +74,6 @@ body {
   border-radius: 10px;
   cursor: pointer;
   font-weight: 500;
-  transition: background 0.2s;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -94,7 +92,6 @@ body {
   position: relative;
 }
 
-/* Header Config */
 .header {
   height: 60px;
   background: white;
@@ -107,7 +104,6 @@ body {
   gap: 12px;
 }
 
-/* Ensures layout doesn't break if your hosting path changes */
 .logo-container {
   display: flex;
   align-items: center;
@@ -118,7 +114,6 @@ body {
   max-height: 30px;
   width: auto;
   object-fit: contain;
-  display: inline-block;
 }
 
 .menu {
@@ -127,9 +122,6 @@ body {
   color: #4b5563;
   padding: 6px;
   border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .menu:hover {
@@ -200,7 +192,7 @@ body {
   word-break: break-word;
 }
 
-/* Loader Styles */
+/* Instant-Loading Spinner Styles */
 .loader-container {
   display: flex;
   align-items: center;
@@ -215,7 +207,7 @@ body {
   border: 2px solid #d1d5db;
   border-top-color: #10b981;
   border-radius: 50%;
-  animation: rotate 1s linear infinite;
+  animation: rotate 0.6s linear infinite;
 }
 
 @keyframes rotate {
@@ -237,12 +229,7 @@ body {
   padding: 10px 14px;
   border-radius: 16px;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
-}
-
-.input-box:focus-within {
-  border-color: #10b981;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
 }
 
 textarea {
@@ -270,6 +257,7 @@ textarea {
   justify-content: center;
   transition: all 0.2s;
   flex-shrink: 0;
+  position: relative;
 }
 
 .mic-btn {
@@ -278,7 +266,19 @@ textarea {
 
 .mic-btn:hover {
   background: #f3f4f6;
-  color: #111827;
+}
+
+/* Pulsing Mic Wave Animation Elements */
+.mic-btn.listening {
+  background: #ef4444 !important;
+  color: white !important;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
 .send-btn {
@@ -303,58 +303,28 @@ textarea {
 }
 
 @media(max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    left: -260px;
-    top: 0;
-    height: 100%;
-    z-index: 1000;
-  }
-  .sidebar.open {
-    left: 0;
-    margin-left: 0;
-  }
-  .overlay.show {
-    display: block;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    z-index: 999;
-  }
-  .chat-container {
-    padding: 20px 15px;
-  }
-  .welcome {
-    margin-top: 15vh;
-  }
-  .welcome h1 {
-    font-size: 26px;
-  }
+  .sidebar { position: fixed; left: -260px; top: 0; height: 100%; z-index: 1000; }
+  .sidebar.open { left: 0; margin-left: 0; }
+  .overlay.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999; }
 }
 </style>
 </head>
-
 <body>
 
 <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
-<!-- Left Sidebar Area -->
 <div class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <span class="sidebar-title">Menu</span>
     <button class="sidebar-toggle-btn" onclick="toggleSidebar()">✕</button>
   </div>
-  <button class="new-chat" onclick="newChat()">
-    <span>+</span> New Chat
-  </button>
+  <button class="new-chat" onclick="newChat()"><span>+</span> New Chat</button>
 </div>
 
-<!-- Right Chat Area Workspace -->
 <div class="main">
   <div class="header">
     <div class="menu" onclick="toggleSidebar()">☰</div>
     <div class="logo-container">
-      <!-- Image asset with structured error fallback to prevent broken icons -->
       <img src="image_ea32dd.png" alt="" class="logo-img" onerror="this.style.display='none';">
       <span>KREHSST Assistant</span>
     </div>
@@ -369,8 +339,8 @@ textarea {
 
   <div class="input-area">
     <div class="input-box">
-      <textarea id="q" placeholder="write your doubt" rows="1" onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
-      <button class="action-btn mic-btn" onclick="startMic()" title="Voice Input">🎤</button>
+      <textarea id="q" placeholder="Ask anything..." rows="1" onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
+      <button class="action-btn mic-btn" id="micBtn" onclick="toggleMic()" title="Voice Input">🎤</button>
       <button class="action-btn send-btn" onclick="ask()" title="Send Message">➔</button>
     </div>
   </div>
@@ -381,20 +351,16 @@ textarea {
 </div>
 
 <script>
+let recognition = null;
+let isListening = false;
+
 function toggleSidebar(){
-  const isMobile = window.innerWidth <= 768;
-  if(isMobile) {
+  if(window.innerWidth <= 768) {
     document.getElementById("sidebar").classList.toggle("open");
     document.getElementById("overlay").classList.toggle("show");
   } else {
     document.getElementById("sidebar").classList.toggle("closed");
   }
-}
-
-function escapeHtml(text){
-  const div = document.createElement("div");
-  div.innerText = text || "";
-  return div.innerHTML;
 }
 
 function autoGrow(element) {
@@ -409,7 +375,7 @@ function addMessage(text, type, isLoader = false){
   
   let innerContent = isLoader 
     ? `<div class="loader-container"><div class="sandbox-icon"></div><span>gathering results...</span></div>`
-    : `<span>${escapeHtml(text)}</span>`;
+    : `<span>${text}</span>`;
 
   wrapper.innerHTML = `
     <div class="avatar ${type === "user" ? "user-avatar" : "bot-avatar"}">${type === "user" ? "U" : "AI"}</div>
@@ -421,16 +387,34 @@ function addMessage(text, type, isLoader = false){
   return wrapper.querySelector(".bubble");
 }
 
+// Simulated High-Speed Stream Typography Effect
+function streamText(element, text) {
+  element.innerHTML = "";
+  let i = 0;
+  // Increase pace by printing chunks instead of characters
+  const words = text.split(" ");
+  function printChunk() {
+    if (i < words.length) {
+      element.innerHTML += (i === 0 ? "" : " ") + words[i];
+      i++;
+      document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
+      setTimeout(printChunk, 15); // Ultra-fast word placement
+    }
+  }
+  printChunk();
+}
+
 async function ask(){
   const input = document.getElementById("q");
   const message = input.value.trim();
   if(!message) return;
 
+  if(isListening) toggleMic(); // Turn off mic upon submission
+
   const welcome = document.getElementById("welcome");
   if(welcome) welcome.style.display = "none";
 
   addMessage(message, "user");
-
   input.value = "";
   input.style.height = "24px"; 
   
@@ -444,7 +428,10 @@ async function ask(){
     });
 
     const data = await res.json();
-    botBubble.innerHTML = escapeHtml(data.answer || "No answer received.");
+    const resultText = data.answer || "No answer received.";
+    
+    // Switch immediately from loader to text stream render
+    streamText(botBubble, resultText);
 
   } catch(error) {
     botBubble.innerHTML = "Unable to search knowledge base. Please check deployment/API setup.";
@@ -458,22 +445,61 @@ function handleKey(event){
   }
 }
 
-function startMic(){
+/* Accelerated Real-Time Voice Transcription Engine */
+function toggleMic() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SpeechRecognition){
-    alert("Voice input not supported in this browser.");
+  if (!SpeechRecognition) {
+    alert("Voice transcription is not supported in this browser.");
     return;
   }
 
-  const recognition = new SpeechRecognition();
-  recognition.lang = "en-IN";
-  recognition.start();
+  const micBtn = document.getElementById("micBtn");
+  const textarea = document.getElementById("q");
 
-  recognition.onresult = function(event){
-    const textarea = document.getElementById("q");
-    textarea.value = event.results[0][0].transcript;
-    autoGrow(textarea);
-  };
+  if (!recognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;  // Keeps microphone active as long as you speak
+    recognition.interimResults = true; // Displays words instantly while you talk
+    recognition.lang = "en-IN";
+
+    recognition.onstart = () => {
+      isListening = true;
+      micBtn.classList.add("listening");
+      textarea.placeholder = "Listening active... talk now";
+    };
+
+    recognition.onresult = (event) => {
+      let finalTranscript = "";
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if(finalTranscript) {
+        textarea.value = finalTranscript;
+        autoGrow(textarea);
+      }
+    };
+
+    recognition.onerror = () => { stopMicSession(); };
+    recognition.onend = () => { stopMicSession(); };
+  }
+
+  if (isListening) {
+    recognition.stop();
+  } else {
+    recognition.start();
+  }
+}
+
+function stopMicSession() {
+  isListening = false;
+  const micBtn = document.getElementById("micBtn");
+  const textarea = document.getElementById("q");
+  if(micBtn) micBtn.classList.remove("listening");
+  if(textarea) textarea.placeholder = "Ask anything...";
 }
 
 function newChat(){
