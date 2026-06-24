@@ -1,289 +1,319 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KREHSST Assistant</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KREHSST Assistant</title>
 
-  <style>
-    * {
-      box-sizing: border-box;
-      font-family: Inter, Arial, sans-serif;
-    }
+<style>
+*{box-sizing:border-box;font-family:Inter,Arial,sans-serif}
+body{margin:0;background:#f7f7f8;color:#111827;height:100vh;display:flex;overflow:hidden}
 
-    body {
-      margin: 0;
-      background: #f7f7f8;
-      color: #1f2937;
-      height: 100vh;
-      display: flex;
-    }
+.sidebar{width:280px;background:#111827;color:white;padding:16px;display:flex;flex-direction:column;gap:14px}
+.logo{font-size:20px;font-weight:700}
+.side-btn{background:#1f2937;color:white;border:1px solid #374151;padding:12px;border-radius:10px;cursor:pointer;text-align:left}
+.side-btn:hover{background:#374151}
 
-    .sidebar {
-      width: 260px;
-      background: #111827;
-      color: white;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
+.account{font-size:13px;color:#d1d5db;border-top:1px solid #374151;padding-top:12px}
+.history{flex:1;overflow-y:auto}
+.history-item{padding:10px;border-radius:8px;cursor:pointer;font-size:14px;color:#e5e7eb}
+.history-item:hover{background:#374151}
 
-    .sidebar h2 {
-      font-size: 20px;
-      margin: 0;
-    }
+.main{flex:1;display:flex;flex-direction:column;height:100vh}
+.header{height:58px;background:white;border-bottom:1px solid #e5e7eb;padding:16px 22px;font-weight:700;display:flex;align-items:center;gap:12px}
+.menu-btn{display:none;background:none;border:none;font-size:24px;cursor:pointer}
 
-    .new-chat {
-      background: #374151;
-      border: 1px solid #4b5563;
-      color: white;
-      padding: 12px;
-      border-radius: 10px;
-      cursor: pointer;
-      text-align: left;
-    }
+.chat-area{flex:1;overflow-y:auto;padding:28px}
+.welcome{text-align:center;margin-top:60px}
+.welcome h1{font-size:32px;margin-bottom:8px}
+.welcome p{color:#6b7280}
 
-    .main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
+.suggestions{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:25px}
+.suggestion{background:white;border:1px solid #e5e7eb;border-radius:14px;padding:12px 16px;cursor:pointer;max-width:260px}
+.suggestion:hover{background:#f3f4f6}
 
-    .header {
-      padding: 18px 24px;
-      border-bottom: 1px solid #e5e7eb;
-      background: white;
-      font-weight: 600;
-    }
+.message{max-width:850px;margin:0 auto 20px;display:flex;gap:12px;line-height:1.6}
+.avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.user-avatar{background:#2563eb;color:white}
+.bot-avatar{background:#10a37f;color:white}
+.bubble{background:white;padding:14px 18px;border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.08);white-space:pre-wrap;max-width:100%}
 
-    .chat-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 30px;
-    }
+.input-area{background:white;border-top:1px solid #e5e7eb;padding:14px}
+.input-box{max-width:900px;margin:auto;display:flex;gap:8px;align-items:center;background:#f3f4f6;border:1px solid #d1d5db;border-radius:18px;padding:10px}
+textarea{flex:1;border:none;background:transparent;resize:none;outline:none;font-size:15px;min-height:40px;max-height:120px}
+button{background:#10a37f;color:white;border:none;border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:600}
+button:hover{background:#0e8f70}
+.mic{background:#374151}
+.auth input{width:100%;margin-bottom:8px;padding:10px;border-radius:8px;border:none}
+.auth button{width:100%;margin-bottom:6px}
 
-    .message {
-      max-width: 800px;
-      margin: 0 auto 22px;
-      display: flex;
-      gap: 14px;
-      line-height: 1.6;
-    }
+.overlay{display:none}
 
-    .avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      flex-shrink: 0;
-    }
-
-    .user-avatar {
-      background: #2563eb;
-      color: white;
-    }
-
-    .bot-avatar {
-      background: #10a37f;
-      color: white;
-    }
-
-    .bubble {
-      background: white;
-      padding: 14px 18px;
-      border-radius: 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      width: fit-content;
-      max-width: 100%;
-      white-space: pre-wrap;
-    }
-
-    .input-area {
-      background: white;
-      border-top: 1px solid #e5e7eb;
-      padding: 18px;
-    }
-
-    .input-box {
-      max-width: 850px;
-      margin: auto;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: #f3f4f6;
-      border: 1px solid #d1d5db;
-      border-radius: 16px;
-      padding: 10px 12px;
-    }
-
-    textarea {
-      flex: 1;
-      border: none;
-      background: transparent;
-      resize: none;
-      outline: none;
-      font-size: 15px;
-      min-height: 38px;
-      max-height: 120px;
-    }
-
-    button {
-      background: #10a37f;
-      color: white;
-      border: none;
-      border-radius: 12px;
-      padding: 10px 16px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    button:hover {
-      background: #0e8f70;
-    }
-
-    .welcome {
-      text-align: center;
-      margin-top: 80px;
-      color: #374151;
-    }
-
-    .welcome h1 {
-      font-size: 34px;
-      margin-bottom: 10px;
-    }
-
-    .welcome p {
-      color: #6b7280;
-    }
-
-    @media (max-width: 768px) {
-      .sidebar {
-        display: none;
-      }
-
-      .chat-area {
-        padding: 20px 14px;
-      }
-
-      .message {
-        max-width: 100%;
-      }
-    }
-  </style>
+@media(max-width:768px){
+  body{display:block}
+  .sidebar{position:fixed;left:-290px;top:0;height:100vh;z-index:10;transition:.3s}
+  .sidebar.open{left:0}
+  .main{width:100%}
+  .menu-btn{display:block}
+  .chat-area{padding:18px 12px}
+  .message{max-width:100%}
+  .welcome h1{font-size:26px}
+  .suggestion{width:100%;max-width:100%}
+  .overlay.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9}
+}
+</style>
 </head>
 
 <body>
 
-  <div class="sidebar">
-    <h2>KREHSST Assistant</h2>
-    <button class="new-chat" onclick="newChat()">+ New Chat</button>
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="logo">KREHSST Assistant</div>
+
+  <button class="side-btn" onclick="newChat()">+ New Chat</button>
+
+  <div class="auth" id="authBox">
+    <input id="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <button onclick="signup()">Create Account</button>
   </div>
 
-  <div class="main">
-    <div class="header">
-      KREHSST Resource Hub
-    </div>
+  <div class="account" id="accountBox" style="display:none;"></div>
 
-    <div class="chat-area" id="chat">
-      <div class="welcome" id="welcome">
-        <h1>How can I help you today?</h1>
-        <p>Ask anything about KREHSST resources, hiring, HR, or support.</p>
-      </div>
-    </div>
+  <div class="history" id="history"></div>
+</aside>
 
-    <div class="input-area">
-      <div class="input-box">
-        <textarea id="q" placeholder="Message KREHSST Assistant..." onkeydown="handleKey(event)"></textarea>
-        <button onclick="ask()">Send</button>
-      </div>
+<main class="main">
+  <div class="header">
+    <button class="menu-btn" onclick="toggleSidebar()">☰</button>
+    KREHSST Resource Hub
+  </div>
+
+  <div class="chat-area" id="chat">
+    <div class="welcome" id="welcome">
+      <h1>How can I help you today?</h1>
+      <p>Ask anything about KREHSST resources, hiring, HR, or support.</p>
+      <div class="suggestions" id="suggestions"></div>
     </div>
   </div>
 
-  <script>
-    async function ask() {
-      const input = document.getElementById("q");
-      const chat = document.getElementById("chat");
-      const welcome = document.getElementById("welcome");
-      const message = input.value.trim();
+  <div class="input-area">
+    <div class="input-box">
+      <textarea id="q" placeholder="Message KREHSST Assistant..." onkeydown="handleKey(event)"></textarea>
+      <button class="mic" onclick="startMic()">🎤</button>
+      <button onclick="ask()">Send</button>
+    </div>
+  </div>
+</main>
 
-      if (!message) return;
+<script>
+let currentChatId = Date.now().toString();
+let currentUser = localStorage.getItem("krehsstUser") || "";
 
-      if (welcome) welcome.style.display = "none";
+const sampleQuestions = [
+  "What services does KREHSST provide?",
+  "How can I contact the HR team?",
+  "Show me recruitment support resources",
+  "Help me understand hiring process",
+  "What documents are required?",
+  "Give me interview preparation tips",
+  "How can I submit my resume?",
+  "Explain employee onboarding process"
+];
 
-      addMessage("You", message, "user");
+window.onload = () => {
+  setupUser();
+  showSuggestions();
+  loadHistory();
+};
 
-      input.value = "";
+function toggleSidebar(){
+  document.getElementById("sidebar").classList.toggle("open");
+  document.getElementById("overlay").classList.toggle("show");
+}
 
-      const thinkingId = addMessage("AI", "Thinking...", "bot");
+function setupUser(){
+  if(currentUser){
+    document.getElementById("authBox").style.display="none";
+    document.getElementById("accountBox").style.display="block";
+    document.getElementById("accountBox").innerHTML =
+      `Logged in as<br><b>${currentUser}</b><br><br><button onclick="logout()">Logout</button>`;
+  }
+}
 
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({ message })
-        });
+function signup(){
+  const email = document.getElementById("email").value.trim();
+  const pass = document.getElementById("password").value.trim();
+  if(!email || !pass) return alert("Enter email and password");
 
-        const data = await res.json();
+  localStorage.setItem("krehsstAccount_" + email, pass);
+  localStorage.setItem("krehsstUser", email);
+  location.reload();
+}
 
-        document.getElementById(thinkingId).innerText =
-          data.answer || "Sorry, I could not find an answer.";
-      } catch (error) {
-        document.getElementById(thinkingId).innerText =
-          "Something went wrong. Please try again.";
-      }
+function login(){
+  const email = document.getElementById("email").value.trim();
+  const pass = document.getElementById("password").value.trim();
 
-      chat.scrollTop = chat.scrollHeight;
-    }
+  if(localStorage.getItem("krehsstAccount_" + email) === pass){
+    localStorage.setItem("krehsstUser", email);
+    location.reload();
+  } else {
+    alert("Invalid login details");
+  }
+}
 
-    function addMessage(name, text, type) {
-      const chat = document.getElementById("chat");
-      const id = "msg-" + Date.now();
+function logout(){
+  localStorage.removeItem("krehsstUser");
+  location.reload();
+}
 
-      const messageDiv = document.createElement("div");
-      messageDiv.className = "message";
+function showSuggestions(){
+  const box = document.getElementById("suggestions");
+  box.innerHTML = "";
 
-      messageDiv.innerHTML = `
-        <div class="avatar ${type === "user" ? "user-avatar" : "bot-avatar"}">
-          ${type === "user" ? "U" : "AI"}
-        </div>
-        <div class="bubble" id="${id}">${escapeHtml(text)}</div>
-      `;
-
-      chat.appendChild(messageDiv);
-      chat.scrollTop = chat.scrollHeight;
-
-      return id;
-    }
-
-    function handleKey(event) {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        ask();
-      }
-    }
-
-    function newChat() {
-      document.getElementById("chat").innerHTML = `
-        <div class="welcome" id="welcome">
-          <h1>How can I help you today?</h1>
-          <p>Ask anything about KREHSST resources, hiring, HR, or support.</p>
-        </div>
-      `;
-    }
-
-    function escapeHtml(text) {
+  sampleQuestions
+    .sort(() => 0.5 - Math.random())
+    .slice(0,3)
+    .forEach(q => {
       const div = document.createElement("div");
-      div.innerText = text;
-      return div.innerHTML;
-    }
-  </script>
+      div.className = "suggestion";
+      div.innerText = q;
+      div.onclick = () => {
+        document.getElementById("q").value = q;
+        ask();
+      };
+      box.appendChild(div);
+    });
+}
+
+async function ask(){
+  const input = document.getElementById("q");
+  const message = input.value.trim();
+  if(!message) return;
+
+  const welcome = document.getElementById("welcome");
+  if(welcome) welcome.style.display = "none";
+
+  addMessage(message, "user");
+  input.value = "";
+
+  const botId = addMessage("Thinking...", "bot");
+
+  try {
+    const res = await fetch("/api/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ message })
+    });
+
+    const data = await res.json();
+    document.getElementById(botId).innerText = data.answer || "No answer found.";
+    saveChat(message, data.answer || "No answer found.");
+  } catch(e){
+    document.getElementById(botId).innerText = "Something went wrong. Please try again.";
+  }
+}
+
+function addMessage(text,type){
+  const chat = document.getElementById("chat");
+  const id = "msg-" + Date.now() + Math.random();
+
+  const div = document.createElement("div");
+  div.className = "message";
+  div.innerHTML = `
+    <div class="avatar ${type === "user" ? "user-avatar" : "bot-avatar"}">
+      ${type === "user" ? "U" : "AI"}
+    </div>
+    <div class="bubble" id="${id}">${escapeHtml(text)}</div>
+  `;
+
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return id;
+}
+
+function saveChat(question,answer){
+  const chats = JSON.parse(localStorage.getItem("krehsstChats") || "[]");
+
+  chats.unshift({
+    id: currentChatId,
+    title: question.slice(0,35),
+    question,
+    answer,
+    date: new Date().toLocaleString()
+  });
+
+  localStorage.setItem("krehsstChats", JSON.stringify(chats.slice(0,20)));
+  loadHistory();
+}
+
+function loadHistory(){
+  const history = document.getElementById("history");
+  const chats = JSON.parse(localStorage.getItem("krehsstChats") || "[]");
+
+  history.innerHTML = "<b>Chat History</b>";
+
+  chats.forEach(chat => {
+    const item = document.createElement("div");
+    item.className = "history-item";
+    item.innerText = chat.title;
+    item.onclick = () => openChat(chat);
+    history.appendChild(item);
+  });
+}
+
+function openChat(chat){
+  document.getElementById("chat").innerHTML = "";
+  addMessage(chat.question, "user");
+  addMessage(chat.answer, "bot");
+  if(window.innerWidth <= 768) toggleSidebar();
+}
+
+function newChat(){
+  currentChatId = Date.now().toString();
+  document.getElementById("chat").innerHTML = `
+    <div class="welcome" id="welcome">
+      <h1>How can I help you today?</h1>
+      <p>Ask anything about KREHSST resources, hiring, HR, or support.</p>
+      <div class="suggestions" id="suggestions"></div>
+    </div>
+  `;
+  showSuggestions();
+}
+
+function handleKey(event){
+  if(event.key === "Enter" && !event.shiftKey){
+    event.preventDefault();
+    ask();
+  }
+}
+
+function startMic(){
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if(!SpeechRecognition){
+    alert("Mic voice input is not supported in this browser.");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
+  recognition.start();
+
+  recognition.onresult = function(event){
+    document.getElementById("q").value = event.results[0][0].transcript;
+  };
+}
+
+function escapeHtml(text){
+  const div = document.createElement("div");
+  div.innerText = text;
+  return div.innerHTML;
+}
+</script>
 
 </body>
 </html>
