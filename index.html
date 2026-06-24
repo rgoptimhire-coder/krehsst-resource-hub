@@ -45,10 +45,12 @@ body {
   margin-bottom: 25px;
 }
 
+/* Inverts the dark logo text to white so it's perfectly visible on the dark background */
 .logo-img {
   max-width: 150px;
   height: auto;
   object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 
 .sidebar-toggle-btn {
@@ -316,6 +318,7 @@ textarea {
 
 <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
 
+<!-- Left Sidebar Area -->
 <div class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <img src="image_ea32dd.png" alt="KREHSST Logo" class="logo-img">
@@ -326,6 +329,7 @@ textarea {
   </button>
 </div>
 
+<!-- Right Chat Area Workspace -->
 <div class="main">
   <div class="header">
     <div class="menu" onclick="toggleSidebar()">☰</div>
