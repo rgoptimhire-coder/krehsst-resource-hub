@@ -97,10 +97,13 @@ async function searchNotionDocuments(query) {
   return docs;
 }
 
-// Optimized Gemini invocation for ultra-clean text layout without formatting artifacts
+// Helper utility to pause execution for retries
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Enhanced Gemini invocation utilizing Gemini 3.5 Flash and clean string text output
 async function askGemini(userMessage, companyKnowledgeContext) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.5-flash", // Upgraded to Gemini 3.5 Flash
     systemInstruction: `
       You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
 
@@ -139,8 +142,25 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     "${userMessage}"
   `;
 
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  const maxRetries = 3;
+  let delay = 1500; 
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await model.generateContent(prompt);
+      return result.response.text();
+    } catch (error) {
+      const is503 = error.status === 503 || error.message?.includes("503") || error.message?.includes("demand");
+      
+      if (is503 && attempt < maxRetries) {
+        console.warn(`Gemini 503 encountered. Retrying attempt ${attempt}/${maxRetries} after ${delay}ms...`);
+        await sleep(delay);
+        delay *= 2; 
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 export default async function handler(req, res) {
@@ -168,6 +188,12 @@ export default async function handler(req, res) {
     return res.status(200).json({ answer });
 
   } catch (error) {
+    if (error.status === 503 || error.message?.includes("503") || error.message?.includes("demand")) {
+      return res.status(200).json({
+        answer: "The HR Copilot is experiencing an unusually high volume of requests at the moment. Please resubmit your question in a minute."
+      });
+    }
+
     return res.status(500).json({ answer: "Error: " + error.message });
   }
 }
