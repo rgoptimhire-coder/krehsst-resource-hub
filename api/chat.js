@@ -1,14 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const NOTION_VERSION = "2022-06-28";
 
-const GEMINI_MODELS = [
-  "gemini-3.5-flash",
-  "gemini-3.1-pro",
-  "gemini-3-flash",
-  "gemini-2.5-flash"
-];
+const NOTION_VERSION = "2022-06-28";
 
 function getPlainText(richText = []) {
   return richText.map(t => t.plain_text || "").join("");
@@ -48,7 +42,10 @@ async function getBlockChildren(blockId) {
   let cursor;
 
   do {
-    const url = new URL(`https://api.notion.com/v1/blocks/${blockId}/children`);
+    const url = new URL(
+      `https://api.notion.com/v1/blocks/${blockId}/children`
+    );
+
     url.searchParams.set("page_size", "100");
 
     if (cursor) {
@@ -81,9 +78,11 @@ async function readPageContent(pageId, depth = 0) {
   if (depth > 2) return "";
 
   const blocks = await getBlockChildren(pageId);
+
   let text = "";
 
   for (const block of blocks) {
+
     const blockText = blockToText(block);
 
     if (blockText) {
@@ -91,10 +90,7 @@ async function readPageContent(pageId, depth = 0) {
     }
 
     if (block.has_children) {
-      const childText = await readPageContent(block.id, depth + 1);
-      if (childText) {
-        text += childText + "\n";
-      }
+      text += await readPageContent(block.id, depth + 1);
     }
   }
 
@@ -102,22 +98,26 @@ async function readPageContent(pageId, depth = 0) {
 }
 
 async function searchNotionDocuments(query) {
-  const response = await fetch("https://api.notion.com/v1/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
-      "Notion-Version": NOTION_VERSION,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      query,
-      page_size: 5,
-      filter: {
-        property: "object",
-        value: "page"
-      }
-    })
-  });
+
+  const response = await fetch(
+    "https://api.notion.com/v1/search",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        query,
+        page_size: 5,
+        filter: {
+          property: "object",
+          value: "page"
+        }
+      })
+    }
+  );
 
   const data = await response.json();
 
@@ -125,118 +125,152 @@ async function searchNotionDocuments(query) {
     throw new Error(data.message || "Notion search failed.");
   }
 
-  if (!data.results || data.results.length === 0) {
-    return "";
+  if (!data.results?.length) {
+    return [];
   }
 
-  let finalText = "";
+  const docs = [];
 
   for (const page of data.results) {
+
     const title = getPageTitle(page);
+
     const content = await readPageContent(page.id);
 
-    if (content.trim()) {
-      finalText += `
-DOCUMENT TITLE: ${title}
-DOCUMENT URL: ${page.url}
-
-DOCUMENT CONTENT:
-${content}
------------------------------
-`;
-    }
+    docs.push({
+      title,
+      url: page.url,
+      content
+    });
   }
 
-  return finalText;
+  return docs;
 }
 
-async function generateWithFallback(prompt) {
-  let lastError;
+async function askGemini(prompt) {
 
-  for (const modelName of GEMINI_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelName
-      });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash"
+  });
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
+  const result = await model.generateContent(prompt);
 
-      return response.text();
-
-    } catch (error) {
-      lastError = error;
-      console.log(`Gemini model failed: ${modelName}`, error.message);
-    }
-  }
-
-  throw lastError;
+  return result.response.text();
 }
 
 export default async function handler(req, res) {
+
   try {
+
     if (req.method !== "POST") {
       return res.status(405).json({
-        answer: "Only POST method is allowed."
+        answer: "Only POST requests are allowed."
       });
     }
 
-    const { message } = req.body || {};
+    const { message } = req.body;
 
-    if (!message || !message.trim()) {
+    if (!message?.trim()) {
       return res.status(400).json({
-        answer: "Please type a keyword or question."
+        answer: "Please enter a question."
       });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        answer: "Missing GEMINI_API_KEY in Vercel environment variables."
-      });
-    }
+    const docs = await searchNotionDocuments(message);
 
-    if (!process.env.NOTION_API_KEY) {
-      return res.status(500).json({
-        answer: "Missing NOTION_API_KEY in Vercel environment variables."
-      });
-    }
+    // NOTHING FOUND IN NOTION
 
-    const notionContent = await searchNotionDocuments(message);
+    if (docs.length === 0) {
 
-    if (!notionContent.trim()) {
+      const externalAnswer = await askGemini(`
+You are KREHSST Resource Hub Assistant.
+
+The user asked:
+
+"${message}"
+
+No matching information was found in company documents.
+
+Provide a concise answer using industry best practices.
+
+Format:
+
+⚠ No exact information was found in KREHSST documents.
+
+Suggested External Guidance:
+
+- Point 1
+- Point 2
+- Point 3
+
+Keep answer under 200 words.
+`);
+
       return res.status(200).json({
-        answer: "Not found in Notion documents."
+        answer: externalAnswer
       });
     }
 
-    const prompt = `
-You are KREHSST Knowledge Assistant.
+    // DOCUMENT FOUND
 
-STRICT RULES:
-1. Use ONLY the Notion document content provided below.
-2. Do NOT use general knowledge.
-3. Do NOT guess.
-4. If the answer is not available in the Notion content, reply exactly:
-"Not found in Notion documents."
-5. Mention the matching document title when useful.
-6. Keep the answer clear and professional.
+    const knowledge = docs.map(doc => `
+DOCUMENT TITLE:
+${doc.title}
 
-NOTION DOCUMENTS:
-${notionContent.slice(0, 25000)}
+CONTENT:
+${doc.content}
+    `).join("\n\n");
 
-USER QUESTION:
+    const answer = await askGemini(`
+You are KREHSST Resource Hub Assistant.
+
+Your job is to answer questions using company documents.
+
+IMPORTANT:
+
+- NEVER copy document text.
+- NEVER dump raw content.
+- ALWAYS summarize.
+- Mention source document.
+- Use bullet points.
+- Maximum 250 words.
+
+If answer is only partially available:
+add practical guidance.
+
+DOCUMENTS:
+
+${knowledge.substring(0, 25000)}
+
+QUESTION:
+
 ${message}
-`;
 
-    const answer = await generateWithFallback(prompt);
+Required format:
+
+📄 Source Document:
+Document Name
+
+✅ Summary:
+- Point 1
+- Point 2
+- Point 3
+
+(Optional)
+
+💡 Additional Guidance:
+- Recommendation
+- Recommendation
+`);
 
     return res.status(200).json({
       answer
     });
 
   } catch (error) {
+
     return res.status(500).json({
-      answer: "Backend error: " + error.message
+      answer: "Error: " + error.message
     });
   }
 }
