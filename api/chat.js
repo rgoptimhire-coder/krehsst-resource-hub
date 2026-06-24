@@ -75,6 +75,7 @@ async function getBlockChildren(blockId) {
 }
 
 async function readPageContent(pageId, depth = 0) {
+
   if (depth > 2) return "";
 
   const blocks = await getBlockChildren(pageId);
@@ -178,40 +179,46 @@ export default async function handler(req, res) {
 
     const docs = await searchNotionDocuments(message);
 
-    // NOTHING FOUND IN NOTION
-
     if (docs.length === 0) {
 
       const externalAnswer = await askGemini(`
 You are KREHSST Resource Hub Assistant.
 
-The user asked:
+The user's question was not found in company documents.
 
-"${message}"
+Answer in simple professional language.
 
-No matching information was found in company documents.
+Rules:
+- Maximum 80 words
+- No markdown
+- No stars
+- No emojis
+- No special symbols
+- Keep answer concise
 
-Provide a concise answer using industry best practices.
+Format exactly:
 
-Format:
+Topic: <Topic>
 
-⚠ No exact information was found in KREHSST documents.
+Answer:
+<Short answer>
 
-Suggested External Guidance:
+Additional Guidance:
+1. First recommendation
+2. Second recommendation
+3. Third recommendation
 
-- Point 1
-- Point 2
-- Point 3
+Note:
+This information was not found in KREHSST documents and is based on general industry practices.
 
-Keep answer under 200 words.
+Question:
+${message}
 `);
 
       return res.status(200).json({
         answer: externalAnswer
       });
     }
-
-    // DOCUMENT FOUND
 
     const knowledge = docs.map(doc => `
 DOCUMENT TITLE:
@@ -224,43 +231,48 @@ ${doc.content}
     const answer = await askGemini(`
 You are KREHSST Resource Hub Assistant.
 
-Your job is to answer questions using company documents.
+Your role is to help employees understand company policies.
 
-IMPORTANT:
+Use only the provided documents.
 
-- NEVER copy document text.
-- NEVER dump raw content.
-- ALWAYS summarize.
+Rules:
+
+- Never copy document content.
+- Never show policy clauses.
+- Never dump document text.
+- Summarize only.
+- Maximum 80 words.
 - Mention source document.
-- Use bullet points.
-- Maximum 250 words.
+- No markdown.
+- No stars.
+- No emojis.
+- No special symbols.
+- No bullet points.
+- Use simple HR language.
 
-If answer is only partially available:
-add practical guidance.
+Return response exactly like this:
+
+Topic: <Topic>
+
+Answer:
+<2 to 4 short sentences>
+
+Key Information:
+1. First point
+2. Second point
+3. Third point
+4. Fourth point
+
+Source:
+<Document Name>
 
 DOCUMENTS:
 
-${knowledge.substring(0, 25000)}
+${knowledge.substring(0,25000)}
 
 QUESTION:
 
 ${message}
-
-Required format:
-
-📄 Source Document:
-Document Name
-
-✅ Summary:
-- Point 1
-- Point 2
-- Point 3
-
-(Optional)
-
-💡 Additional Guidance:
-- Recommendation
-- Recommendation
 `);
 
     return res.status(200).json({
