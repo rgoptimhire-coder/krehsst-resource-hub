@@ -21,7 +21,7 @@ body {
   color: #1f2937;
 }
 
-/* Sidebar Styling & Desktop Toggle Capabilities */
+/* Sidebar Styling */
 .sidebar {
   width: 260px;
   background: #111827;
@@ -94,7 +94,7 @@ body {
   position: relative;
 }
 
-/* Updated Header to host Logo next to Assistant Title */
+/* Header Config */
 .header {
   height: 60px;
   background: white;
@@ -107,11 +107,18 @@ body {
   gap: 12px;
 }
 
+/* Ensures layout doesn't break if your hosting path changes */
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .logo-img {
-  max-height: 28px;
+  max-height: 30px;
   width: auto;
   object-fit: contain;
-  display: block;
+  display: inline-block;
 }
 
 .menu {
@@ -193,7 +200,7 @@ body {
   word-break: break-word;
 }
 
-/* Loader Styling */
+/* Loader Styles */
 .loader-container {
   display: flex;
   align-items: center;
@@ -283,7 +290,6 @@ textarea {
   background: #059669;
 }
 
-/* 1-Line Page Bottom Disclaimer Styling */
 .disclaimer {
   text-align: center;
   font-size: 12px;
@@ -296,7 +302,6 @@ textarea {
   display: none;
 }
 
-/* Responsive Adaptive Viewports */
 @media(max-width: 768px) {
   .sidebar {
     position: fixed;
@@ -348,9 +353,11 @@ textarea {
 <div class="main">
   <div class="header">
     <div class="menu" onclick="toggleSidebar()">☰</div>
-    <!-- Logo placed directly beside the text title -->
-    <img src="/image_ea32dd.png" alt="Logo" class="logo-img">
-    <span>KREHSST Assistant</span>
+    <div class="logo-container">
+      <!-- Image asset with structured error fallback to prevent broken icons -->
+      <img src="image_ea32dd.png" alt="" class="logo-img" onerror="this.style.display='none';">
+      <span>KREHSST Assistant</span>
+    </div>
   </div>
 
   <div class="chat-container" id="chat">
@@ -368,7 +375,6 @@ textarea {
     </div>
   </div>
 
-  <!-- 1-line Bottom Disclaimer -->
   <div class="disclaimer">
     Disclaimer: AI generated answers can occasionally be inaccurate. Please cross-verify critical internal data.
   </div>
