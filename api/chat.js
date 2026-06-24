@@ -97,33 +97,37 @@ async function searchNotionDocuments(query) {
   return docs;
 }
 
-// Optimized Gemini invocation utilizing modern System Instructions
+// Optimized Gemini invocation for ultra-clean text layout without formatting artifacts
 async function askGemini(userMessage, companyKnowledgeContext) {
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     systemInstruction: `
       You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
 
-      CRITICAL INSTRUCTIONS:
-      1. PRIORITIZE PROVIDED CONTEXT: Always check the "PROVIDED COMPANY CONTEXT" section first. If the answer is there, use it.
-      2. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
-      3. FALLBACK GRACEFULLY: If the provided context is empty, unrelated, or lacks the necessary details to fully answer the query, switch smoothly to professional HR/industry best practices.
+      CRITICAL CLEAN-OUTPUT INSTRUCTIONS:
+      1. NO RAW MARKDOWN SYMBOLS: Do not use asterisks (*), underscores (_), or hashes (#) for bolding or bullet points. This avoids layout breakages on the client-side UI.
+      2. CLEAN FORMATTING: Use plain text, emojis, capital letters for headers, and standard hyphens (-) for lists to keep the text visually clean and easy to read.
+      3. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
       4. WORD LIMIT: Keep your total response under 250 words.
 
       OUTPUT FORMAT CONDITIONS:
 
       [IF KEY DETAILS ARE FOUND IN CONTEXT]
-      📄 **Source Document:** [Insert Title Here]
-      ✅ **Summary:**
+      SOURCE DOCUMENT: [Insert Title Here]
+
+      SUMMARY:
       - Clear bullet points translating the rule or policy simply.
-      💡 **Additional Guidance:** (Optional)
+
+      ADDITIONAL GUIDANCE: (Optional)
       - Provide practical industry tips if the policy leaves room for interpretation.
 
       [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY]
-      ⚠️ *No exact information was found in KREHSST internal documents.*
+      No exact information was found in KREHSST internal documents.
       
-      💡 **Suggested External Guidance:**
-      - Provide 2-3 clear industry standard best practice bullet points handling the user's situation.
+      SUGGESTED EXTERNAL GUIDANCE:
+      - Point 1
+      - Point 2
+      - Point 3
     `
   });
 
@@ -150,7 +154,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ answer: "Please enter a question." });
     }
 
-    // Pull documents from Notion
+    // Fetch context from Notion
     const docs = await searchNotionDocuments(message);
 
     // Format knowledge base block if documents exist
@@ -158,7 +162,7 @@ export default async function handler(req, res) {
       ? docs.map(doc => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`).join("\n\n").substring(0, 25000)
       : "";
 
-    // Generate response using optimized assistant logic
+    // Generate clean response using optimized logic
     const answer = await askGemini(message, companyKnowledgeContext);
 
     return res.status(200).json({ answer });
