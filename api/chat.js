@@ -97,42 +97,38 @@ async function searchNotionDocuments(query) {
   return docs;
 }
 
-// Helper utility to pause execution for retries
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Enhanced Gemini invocation utilizing Gemini 3.5 Flash and clean string text output
+// Comprehensive cascade array ensuring model fallback continuity
 async function askGemini(userMessage, companyKnowledgeContext) {
-  const model = genAI.getGenerativeModel({
-    model: "gemini-3.5-flash", // Upgraded to Gemini 3.5 Flash
-    systemInstruction: `
-      You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
+  const systemInstruction = `
+    You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
 
-      CRITICAL CLEAN-OUTPUT INSTRUCTIONS:
-      1. NO RAW MARKDOWN SYMBOLS: Do not use asterisks (*), underscores (_), or hashes (#) for bolding or bullet points. This avoids layout breakages on the client-side UI.
-      2. CLEAN FORMATTING: Use plain text, emojis, capital letters for headers, and standard hyphens (-) for lists to keep the text visually clean and easy to read.
-      3. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
-      4. WORD LIMIT: Keep your total response under 250 words.
+    CRITICAL CLEAN-OUTPUT INSTRUCTIONS:
+    1. NO RAW MARKDOWN SYMBOLS: Do not use asterisks (*), underscores (_), or hashes (#) for bolding or bullet points. This avoids layout breakages on the client-side UI.
+    2. CLEAN FORMATTING: Use plain text, emojis, capital letters for headers, and standard hyphens (-) for lists to keep the text visually clean and easy to read.
+    3. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
+    4. WORD LIMIT: Keep your total response under 250 words.
 
-      OUTPUT FORMAT CONDITIONS:
+    OUTPUT FORMAT CONDITIONS:
 
-      [IF KEY DETAILS ARE FOUND IN CONTEXT]
-      SOURCE DOCUMENT: [Insert Title Here]
+    [IF KEY DETAILS ARE FOUND IN CONTEXT]
+    SOURCE DOCUMENT: [Insert Title Here]
 
-      SUMMARY:
-      - Clear bullet points translating the rule or policy simply.
+    SUMMARY:
+    - Clear bullet points translating the rule or policy simply.
 
-      ADDITIONAL GUIDANCE: (Optional)
-      - Provide practical industry tips if the policy leaves room for interpretation.
+    ADDITIONAL GUIDANCE: (Optional)
+    - Provide practical industry tips if the policy leaves room for interpretation.
 
-      [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY]
-      No exact information was found in KREHSST internal documents.
-      
-      SUGGESTED EXTERNAL GUIDANCE:
-      - Point 1
-      - Point 2
-      - Point 3
-    `
-  });
+    [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY]
+    No exact information was found in KREHSST internal documents.
+    
+    SUGGESTED EXTERNAL GUIDANCE:
+    - Point 1
+    - Point 2
+    - Point 3
+  `;
 
   const prompt = `
     PROVIDED COMPANY CONTEXT:
@@ -142,25 +138,42 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     "${userMessage}"
   `;
 
-  const maxRetries = 3;
-  let delay = 1500; 
+  // Exhaustive list spanning Gemini 3.5, 2.5, and 1.5 architectures (Flash + Pro variants)
+  const modelsToTry = [
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+    "gemini-2.5-pro",
+    "gemini-1.5-pro"
+  ];
+  
+  for (const modelName of modelsToTry) {
+    let delay = 1000;
+    const maxRetriesForThisModel = 2;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await model.generateContent(prompt);
-      return result.response.text();
-    } catch (error) {
-      const is503 = error.status === 503 || error.message?.includes("503") || error.message?.includes("demand");
-      
-      if (is503 && attempt < maxRetries) {
-        console.warn(`Gemini 503 encountered. Retrying attempt ${attempt}/${maxRetries} after ${delay}ms...`);
-        await sleep(delay);
-        delay *= 2; 
-        continue;
+    for (let attempt = 1; attempt <= maxRetriesForThisModel; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
+        const result = await model.generateContent(prompt);
+        return result.response.text();
+      } catch (error) {
+        console.warn(`Attempt on model ${modelName} encountered an error: ${error.message}`);
+        
+        // Retry transient network errors or rate spikes quickly
+        const isTransient = error.status === 503 || error.status === 429 || error.message?.includes("503") || error.message?.includes("demand");
+        if (isTransient && attempt < maxRetriesForThisModel) {
+          await sleep(delay);
+          delay *= 1.5;
+          continue;
+        }
+        
+        // Break out to try the next model model variant in our chain
+        break; 
       }
-      throw error;
     }
   }
+
+  throw new Error("All AI processing endpoints are currently unresponsive.");
 }
 
 export default async function handler(req, res) {
@@ -177,23 +190,20 @@ export default async function handler(req, res) {
     // Fetch context from Notion
     const docs = await searchNotionDocuments(message);
 
-    // Format knowledge base block if documents exist
     const companyKnowledgeContext = docs.length > 0 
       ? docs.map(doc => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`).join("\n\n").substring(0, 25000)
       : "";
 
-    // Generate clean response using optimized logic
+    // Generate response using full cascade protection
     const answer = await askGemini(message, companyKnowledgeContext);
 
     return res.status(200).json({ answer });
 
   } catch (error) {
-    if (error.status === 503 || error.message?.includes("503") || error.message?.includes("demand")) {
-      return res.status(200).json({
-        answer: "The HR Copilot is experiencing an unusually high volume of requests at the moment. Please resubmit your question in a minute."
-      });
-    }
-
-    return res.status(500).json({ answer: "Error: " + error.message });
+    // Ultimate safety shield: If absolutely everything fails, hide the code error and show a clean notice.
+    console.error("Critical System Failure:", error.message);
+    return res.status(200).json({ 
+      answer: "The HR Assistant is currently updating its system components. Please refresh and try asking your question again in a moment." 
+    });
   }
 }
