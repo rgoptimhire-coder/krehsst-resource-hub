@@ -45,12 +45,10 @@ body {
   margin-bottom: 25px;
 }
 
-/* Inverts the dark logo text to white so it's perfectly visible on the dark background */
-.logo-img {
-  max-width: 150px;
-  height: auto;
-  object-fit: contain;
-  filter: brightness(0) invert(1);
+.sidebar-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #f3f4f6;
 }
 
 .sidebar-toggle-btn {
@@ -96,6 +94,7 @@ body {
   position: relative;
 }
 
+/* Updated Header to host Logo next to Assistant Title */
 .header {
   height: 60px;
   background: white;
@@ -105,7 +104,14 @@ body {
   padding: 0 20px;
   font-weight: 600;
   font-size: 16px;
-  gap: 15px;
+  gap: 12px;
+}
+
+.logo-img {
+  max-height: 28px;
+  width: auto;
+  object-fit: contain;
+  display: block;
 }
 
 .menu {
@@ -210,7 +216,7 @@ body {
 }
 
 .input-area {
-  padding: 20px;
+  padding: 20px 20px 8px 20px;
   background: linear-gradient(transparent, white 20%);
 }
 
@@ -277,6 +283,15 @@ textarea {
   background: #059669;
 }
 
+/* 1-Line Page Bottom Disclaimer Styling */
+.disclaimer {
+  text-align: center;
+  font-size: 12px;
+  color: #9ca3af;
+  padding-bottom: 8px;
+  background: white;
+}
+
 .overlay {
   display: none;
 }
@@ -321,7 +336,7 @@ textarea {
 <!-- Left Sidebar Area -->
 <div class="sidebar" id="sidebar">
   <div class="sidebar-header">
-    <img src="image_ea32dd.png" alt="KREHSST Logo" class="logo-img">
+    <span class="sidebar-title">Menu</span>
     <button class="sidebar-toggle-btn" onclick="toggleSidebar()">✕</button>
   </div>
   <button class="new-chat" onclick="newChat()">
@@ -333,6 +348,8 @@ textarea {
 <div class="main">
   <div class="header">
     <div class="menu" onclick="toggleSidebar()">☰</div>
+    <!-- Logo placed directly beside the text title -->
+    <img src="/image_ea32dd.png" alt="Logo" class="logo-img">
     <span>KREHSST Assistant</span>
   </div>
 
@@ -349,6 +366,11 @@ textarea {
       <button class="action-btn mic-btn" onclick="startMic()" title="Voice Input">🎤</button>
       <button class="action-btn send-btn" onclick="ask()" title="Send Message">➔</button>
     </div>
+  </div>
+
+  <!-- 1-line Bottom Disclaimer -->
+  <div class="disclaimer">
+    Disclaimer: AI generated answers can occasionally be inaccurate. Please cross-verify critical internal data.
   </div>
 </div>
 
@@ -404,9 +426,8 @@ async function ask(){
   addMessage(message, "user");
 
   input.value = "";
-  input.style.height = "24px"; // Reset typing tray height lines
+  input.style.height = "24px"; 
   
-  // Rotating icon container reference hook
   const botBubble = addMessage("", "bot", true);
 
   try{
