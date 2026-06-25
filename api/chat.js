@@ -97,6 +97,15 @@ async function searchNotionDocuments(query) {
 }
 
 async function askGemini(userMessage, companyKnowledgeContext) {
+  // 1. FAST CONVERSATIONAL BYPASS: Handle generic greetings instantly without triggering the template
+  const cleanMsg = userMessage.toLowerCase().trim();
+  const greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "sup", "yo", "test"];
+  
+  if (greetings.includes(cleanMsg) || cleanMsg.length <= 3) {
+    return "Hello! 👋 I am your KREHSST Resource Hub Assistant. How can I help you with our company policies, guidelines, or resource documents today?";
+  }
+
+  // 2. STANDARD HR RULE ENGINE (For actual queries)
   const systemInstruction = `
     You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
 
@@ -134,7 +143,6 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     "${userMessage}"
   `;
 
-  // Updated model list to the standard generative landscape ecosystem endpoints
   const modelsToTry = [
     "gemini-1.5-flash",
     "gemini-1.5-pro"
@@ -144,7 +152,6 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
       
-      // Included systemInstruction safely inside generateContent parameters
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         systemInstruction: systemInstruction,
@@ -161,7 +168,6 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     }
   }
 
-  // Safe fallback if the API key itself is broken or invalid
   return `No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please verify details with your team leader.\n- Rephrase your query to search for exact policy document terms.`;
 }
 
