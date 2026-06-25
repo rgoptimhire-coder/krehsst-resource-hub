@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// Ensure your environment variable matches exactly what is in your hosting platform (Vercel/Render)
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const NOTION_VERSION = "2022-06-28";
 
@@ -90,7 +91,7 @@ async function searchNotionDocuments(query) {
     }
     return docs;
   } catch (err) {
-    console.error("Notion fetch bypass:", err.message);
+    console.error("Notion Search Error:", err.message);
     return [];
   }
 }
@@ -103,11 +104,12 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     1. NO RAW MARKDOWN SYMBOLS: Do not use asterisks (*), underscores (_), or hashes (#) for bolding or bullet points. This avoids layout breakages on the client-side UI.
     2. CLEAN FORMATTING: Use plain text, emojis, capital letters for headers, and standard hyphens (-) for lists to keep the text visually clean and easy to read.
     3. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
-    4. WORD LIMIT: Keep your total response under 250 words.
+    4. EVALUATE RELEVANCE: If the context retrieved does not actually answer the user's question, treat the context as empty.
+    5. WORD LIMIT: Keep your total response under 250 words.
 
     OUTPUT FORMAT CONDITIONS:
 
-    [IF KEY DETAILS ARE FOUND IN CONTEXT]
+    [IF KEY DETAILS ARE FOUND IN CONTEXT AND ARE RELEVANT]
     SOURCE DOCUMENT: [Insert Title Here]
 
     SUMMARY:
@@ -116,53 +118,51 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     ADDITIONAL GUIDANCE: (Optional)
     - Provide practical industry tips if the policy leaves room for interpretation.
 
-    [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY]
+    [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY OR IRRELEVANT]
     No exact information was found in KREHSST internal documents.
     
     SUGGESTED EXTERNAL GUIDANCE:
-    - Point 1
-    - Point 2
-    - Point 3
+    - Provide helpful general industry standard advice or guidelines matching their query here.
+    - Keep it practical, structured, and friendly.
   `;
 
   const prompt = `
-    PROVIDED COMPANY CONTEXT:
-    ${companyKnowledgeContext || "No internal documents found for this query."}
+    PROVIDED COMPANY CONTEXT FROM NOTION:
+    ${companyKnowledgeContext || "No internal documents matched this query."}
 
     USER QUERY:
     "${userMessage}"
   `;
 
-  // Comprehensive fallback cascade: Flash 2.5 -> Flash 1.5 -> Pro 1.5
+  // Updated model list to the standard generative landscape ecosystem endpoints
   const modelsToTry = [
-    "gemini-2.5-flash", 
     "gemini-1.5-flash",
     "gemini-1.5-pro"
   ];
   
   for (const modelName of modelsToTry) {
     try {
-      const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
+      const model = genAI.getGenerativeModel({ model: modelName });
+      
+      // Included systemInstruction safely inside generateContent parameters
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 500, temperature: 0.4 } 
+        systemInstruction: systemInstruction,
+        generationConfig: { maxOutputTokens: 500, temperature: 0.3 } 
       });
-      if (result?.response?.text()) {
-        return result.response.text();
+      
+      const reply = result?.response?.text();
+      if (reply && reply.trim().length > 0) {
+        return reply;
       }
     } catch (error) {
-      console.warn(`Model ${modelName} unavailable. Trying alternative route...`);
+      console.warn(`Model ${modelName} error or rate limit. Trying next model...`, error.message);
       continue; 
     }
   }
 
-  // Pure Local Fallback Shield: If the entire Gemini cloud API breaks down entirely, 
-  // don't drop an error—instantly return a perfectly structured plain-text fallback response.
-  if (companyKnowledgeContext) {
-    return `SOURCE DOCUMENT: KREHSST Internal Knowledge Base\n\nSUMMARY:\n- The system is experiencing high volume, but here is a direct excerpt from your internal files:\n\n${companyKnowledgeContext.substring(0, 150)}`;
-  }
-
-  return `No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please check back shortly or consult your direct HR manager while we finish compiling these resources.\n- Double check the exact wording of your inquiry.`;
+  // Safe fallback if the API key itself is broken or invalid
+  return `No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please verify details with your team leader.\n- Rephrase your query to search for exact policy document terms.`;
 }
 
 export default async function handler(req, res) {
@@ -178,7 +178,7 @@ export default async function handler(req, res) {
 
     const docs = await searchNotionDocuments(message);
     const companyKnowledgeContext = docs.length > 0 
-      ? docs.map(doc => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`).join("\n\n").substring(0, 12000)
+      ? docs.map(doc => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`).join("\n\n").substring(0, 10000)
       : "";
 
     const answer = await askGemini(message, companyKnowledgeContext);
@@ -187,7 +187,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("Critical System Catch:", error.message);
     return res.status(200).json({ 
-      answer: "No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please verify details with your HR lead.\n- Refresh your connection if this takes longer than usual." 
+      answer: "No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please speak directly with HR regarding your request.\n- Your assistant dashboard is online, please try rephrasing your message." 
     });
   }
 }
