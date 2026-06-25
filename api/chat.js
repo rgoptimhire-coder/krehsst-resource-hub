@@ -97,7 +97,7 @@ async function searchNotionDocuments(query) {
 }
 
 async function askGemini(userMessage, companyKnowledgeContext) {
-  // 1. FAST CONVERSATIONAL BYPASS: Handle generic greetings instantly without triggering the template
+  // Fast conversational greeting check
   const cleanMsg = userMessage.toLowerCase().trim();
   const greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "sup", "yo", "test"];
   
@@ -105,7 +105,6 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     return "Hello! 👋 I am your KREHSST Resource Hub Assistant. How can I help you with our company policies, guidelines, or resource documents today?";
   }
 
-  // 2. STANDARD HR RULE ENGINE (For actual queries)
   const systemInstruction = `
     You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
 
@@ -113,12 +112,12 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     1. NO RAW MARKDOWN SYMBOLS: Do not use asterisks (*), underscores (_), or hashes (#) for bolding or bullet points. This avoids layout breakages on the client-side UI.
     2. CLEAN FORMATTING: Use plain text, emojis, capital letters for headers, and standard hyphens (-) for lists to keep the text visually clean and easy to read.
     3. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
-    4. EVALUATE RELEVANCE: If the context retrieved does not actually answer the user's question, treat the context as empty.
+    4. EVALUATE RELEVANCE FIRST: Look at the PROVIDED COMPANY CONTEXT FROM NOTION. If it contains data but doesn't actually answer the user's specific request (e.g., user asks for a PMM Job Description but context only has recruiting strategies), treat the context as empty.
     5. WORD LIMIT: Keep your total response under 250 words.
 
     OUTPUT FORMAT CONDITIONS:
 
-    [IF KEY DETAILS ARE FOUND IN CONTEXT AND ARE RELEVANT]
+    [CONDITION A: IF RELEVANT DETAILS ARE FOUND IN THE NOTION CONTEXT]
     SOURCE DOCUMENT: [Insert Title Here]
 
     SUMMARY:
@@ -127,12 +126,12 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     ADDITIONAL GUIDANCE: (Optional)
     - Provide practical industry tips if the policy leaves room for interpretation.
 
-    [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY OR IRRELEVANT]
-    No exact information was found in KREHSST internal documents.
+    [CONDITION B: IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY OR IRRELEVANT]
+    Data not available in Library, check alternate source below.
     
     SUGGESTED EXTERNAL GUIDANCE:
-    - Provide helpful general industry standard advice or guidelines matching their query here.
-    - Keep it practical, structured, and friendly.
+    - Act as an expert HR Copilot and use your broad internet-trained knowledge to fulfill their request directly here.
+    - Provide an exceptionally structured, helpful draft, template, or answer using plain text and clear hyphenated lists.
   `;
 
   const prompt = `
@@ -143,9 +142,12 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     "${userMessage}"
   `;
 
+  // Backend cascade loop starting directly with Gemini 3+ endpoints
   const modelsToTry = [
-    "gemini-1.5-flash",
-    "gemini-1.5-pro"
+    "gemini-3.5-flash",
+    "gemini-3.1-pro",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash"
   ];
   
   for (const modelName of modelsToTry) {
@@ -155,7 +157,7 @@ async function askGemini(userMessage, companyKnowledgeContext) {
       const result = await model.generateContent({
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         systemInstruction: systemInstruction,
-        generationConfig: { maxOutputTokens: 500, temperature: 0.3 } 
+        generationConfig: { maxOutputTokens: 600, temperature: 0.3 } 
       });
       
       const reply = result?.response?.text();
@@ -163,12 +165,12 @@ async function askGemini(userMessage, companyKnowledgeContext) {
         return reply;
       }
     } catch (error) {
-      console.warn(`Model ${modelName} error or rate limit. Trying next model...`, error.message);
+      console.warn(`Model ${modelName} error or rate limit. Trying next model tier...`, error.message);
       continue; 
     }
   }
 
-  return `No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please verify details with your team leader.\n- Rephrase your query to search for exact policy document terms.`;
+  return `Data not available in Library, check alternate source below.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Connection timeout. Please rephrase your query or contact HR management.`;
 }
 
 export default async function handler(req, res) {
@@ -182,18 +184,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ answer: "Please enter a question." });
     }
 
+    // Queries internal Notion database first
     const docs = await searchNotionDocuments(message);
     const companyKnowledgeContext = docs.length > 0 
       ? docs.map(doc => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`).join("\n\n").substring(0, 10000)
       : "";
 
+    // Executes cascading LLM pipeline
     const answer = await askGemini(message, companyKnowledgeContext);
     return res.status(200).json({ answer });
 
   } catch (error) {
     console.error("Critical System Catch:", error.message);
     return res.status(200).json({ 
-      answer: "No exact information was found in KREHSST internal documents.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- Please speak directly with HR regarding your request.\n- Your assistant dashboard is online, please try rephrasing your message." 
+      answer: "Data not available in Library, check alternate source below.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- System infrastructure is recovering. Please resend your text in a brief moment." 
     });
   }
 }
