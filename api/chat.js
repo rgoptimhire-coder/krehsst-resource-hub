@@ -1,528 +1,182 @@
-This is my current code 
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>KREHSST Assistant</title>
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const NOTION_VERSION = "2022-06-28";
 
-<style>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: Inter, -apple-system, Segoe UI, Roboto, sans-serif;
+function getPlainText(richText = []) {
+  return richText.map(t => t.plain_text || "").join("");
 }
 
-body {
-  display: flex;
-  height: 100vh;
-  background: #f9fafb;
-  overflow: hidden;
-  color: #1f2937;
+function blockToText(block) {
+  const type = block.type;
+  const data = block[type];
+  if (!data) return "";
+  if (data.rich_text) return getPlainText(data.rich_text);
+  if (type === "child_page") return data.title || "";
+  return "";
 }
 
-/* Sidebar Styles */
-.sidebar {
-  width: 260px;
-  background: #111827;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  padding: 20px 15px;
-  transition: all 0.2s ease-out;
-  flex-shrink: 0;
-  z-index: 100;
-}
-
-.sidebar.closed {
-  margin-left: -260px;
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 25px;
-}
-
-.sidebar-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #f3f4f6;
-}
-
-.sidebar-toggle-btn {
-  background: transparent;
-  border: none;
-  color: #9ca3af;
-  font-size: 20px;
-  cursor: pointer;
-  padding: 5px 8px;
-  border-radius: 6px;
-}
-
-.sidebar-toggle-btn:hover {
-  background: #1f2937;
-  color: white;
-}
-
-.new-chat {
-  background: #1f2937;
-  border: 1px solid #374151;
-  color: white;
-  padding: 12px 16px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.new-chat:hover {
-  background: #374151;
-}
-
-.main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-}
-
-.header {
-  height: 60px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  font-weight: 600;
-  font-size: 16px;
-  gap: 12px;
-}
-
-.logo-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.logo-img {
-  max-height: 30px;
-  width: auto;
-  object-fit: contain;
-}
-
-.menu {
-  cursor: pointer;
-  font-size: 20px;
-  color: #4b5563;
-  padding: 6px;
-  border-radius: 6px;
-}
-
-.menu:hover {
-  background: #f3f4f6;
-}
-
-.chat-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 40px 20px;
-  scroll-behavior: smooth;
-}
-
-.welcome {
-  text-align: center;
-  margin: 12vh auto 0;
-  max-width: 600px;
-}
-
-.welcome h1 {
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: 12px;
-  color: #111827;
-}
-
-.welcome p {
-  color: #4b5563;
-  font-size: 16px;
-}
-
-.message-wrapper {
-  max-width: 800px;
-  margin: 0 auto 28px;
-  display: flex;
-  gap: 16px;
-}
-
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.user-avatar {
-  background: #4f46e5;
-  color: white;
-}
-
-.bot-avatar {
-  background: #10b981;
-  color: white;
-}
-
-.bubble {
-  flex: 1;
-  background: transparent;
-  padding: 4px 0;
-  line-height: 1.6;
-  font-size: 15px;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Instant-Loading Spinner Styles */
-.loader-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.sandbox-icon {
-  width: 18px;
-  height: 18px;
-  border: 2px solid #d1d5db;
-  border-top-color: #10b981;
-  border-radius: 50%;
-  animation: rotate 0.6s linear infinite;
-}
-
-@keyframes rotate {
-  to { transform: rotate(360deg); }
-}
-
-.input-area {
-  padding: 20px 20px 8px 20px;
-  background: linear-gradient(transparent, white 20%);
-}
-
-.input-box {
-  max-width: 800px;
-  margin: auto;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  background: white;
-  padding: 10px 14px;
-  border-radius: 16px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-}
-
-textarea {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  resize: none;
-  font-size: 15px;
-  min-height: 24px;
-  max-height: 200px;
-  line-height: 1.5;
-  padding: 4px 0;
-}
-
-.action-btn {
-  background: transparent;
-  border: none;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  flex-shrink: 0;
-  position: relative;
-}
-
-.mic-btn {
-  color: #4b5563;
-}
-
-.mic-btn:hover {
-  background: #f3f4f6;
-}
-
-/* Pulsing Mic Wave Animation Elements */
-.mic-btn.listening {
-  background: #ef4444 !important;
-  color: white !important;
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-
-.send-btn {
-  background: #10b981;
-  color: white;
-}
-
-.send-btn:hover {
-  background: #059669;
-}
-
-.disclaimer {
-  text-align: center;
-  font-size: 12px;
-  color: #9ca3af;
-  padding-bottom: 8px;
-  background: white;
-}
-
-.overlay {
-  display: none;
-}
-
-@media(max-width: 768px) {
-  .sidebar { position: fixed; left: -260px; top: 0; height: 100%; z-index: 1000; }
-  .sidebar.open { left: 0; margin-left: 0; }
-  .overlay.show { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 999; }
-}
-</style>
-</head>
-<body>
-
-<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
-
-<div class="sidebar" id="sidebar">
-  <div class="sidebar-header">
-    <span class="sidebar-title">Menu</span>
-    <button class="sidebar-toggle-btn" onclick="toggleSidebar()">✕</button>
-  </div>
-  <button class="new-chat" onclick="newChat()"><span>+</span> New Chat</button>
-</div>
-
-<div class="main">
-  <div class="header">
-    <div class="menu" onclick="toggleSidebar()">☰</div>
-    <div class="logo-container">
-      <img src="image_ea32dd.png" alt="" class="logo-img" onerror="this.style.display='none';">
-      <span>KREHSST Assistant</span>
-    </div>
-  </div>
-
-  <div class="chat-container" id="chat">
-    <div class="welcome" id="welcome">
-      <h1>How can I help you?</h1>
-      <p>Ask anything from your internal company resource documents.</p>
-    </div>
-  </div>
-
-  <div class="input-area">
-    <div class="input-box">
-      <textarea id="q" placeholder="Ask anything..." rows="1" onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
-      <button class="action-btn mic-btn" id="micBtn" onclick="toggleMic()" title="Voice Input">🎤</button>
-      <button class="action-btn send-btn" onclick="ask()" title="Send Message">➔</button>
-    </div>
-  </div>
-
-  <div class="disclaimer">
-    Disclaimer: AI generated answers can occasionally be inaccurate. Please cross-verify critical internal data.
-  </div>
-</div>
-
-<script>
-let recognition = null;
-let isListening = false;
-
-function toggleSidebar(){
-  if(window.innerWidth <= 768) {
-    document.getElementById("sidebar").classList.toggle("open");
-    document.getElementById("overlay").classList.toggle("show");
-  } else {
-    document.getElementById("sidebar").classList.toggle("closed");
-  }
-}
-
-function autoGrow(element) {
-  element.style.height = "24px";
-  element.style.height = (element.scrollHeight - 4) + "px";
-}
-
-function addMessage(text, type, isLoader = false){
-  const chat = document.getElementById("chat");
-  const wrapper = document.createElement("div");
-  wrapper.className = "message-wrapper";
-  
-  let innerContent = isLoader 
-    ? `<div class="loader-container"><div class="sandbox-icon"></div><span>gathering results...</span></div>`
-    : `<span>${text}</span>`;
-
-  wrapper.innerHTML = `
-    <div class="avatar ${type === "user" ? "user-avatar" : "bot-avatar"}">${type === "user" ? "U" : "AI"}</div>
-    <div class="bubble">${innerContent}</div>
-  `;
-  
-  chat.appendChild(wrapper);
-  chat.scrollTop = chat.scrollHeight;
-  return wrapper.querySelector(".bubble");
-}
-
-// Simulated High-Speed Stream Typography Effect
-function streamText(element, text) {
-  element.innerHTML = "";
-  let i = 0;
-  // Increase pace by printing chunks instead of characters
-  const words = text.split(" ");
-  function printChunk() {
-    if (i < words.length) {
-      element.innerHTML += (i === 0 ? "" : " ") + words[i];
-      i++;
-      document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
-      setTimeout(printChunk, 15); // Ultra-fast word placement
+function getPageTitle(page) {
+  if (!page.properties) return "Untitled";
+  for (const prop of Object.values(page.properties)) {
+    if (prop.type === "title" && prop.title?.length) {
+      return getPlainText(prop.title);
     }
   }
-  printChunk();
+  return "Untitled";
 }
 
-async function ask(){
-  const input = document.getElementById("q");
-  const message = input.value.trim();
-  if(!message) return;
+async function getBlockChildren(blockId) {
+  let allBlocks = [];
+  let cursor;
+  do {
+    const url = new URL(`https://api.notion.com/v1/blocks/${blockId}/children`);
+    url.searchParams.set("page_size", "100");
+    if (cursor) url.searchParams.set("start_cursor", cursor);
 
-  if(isListening) toggleMic(); // Turn off mic upon submission
-
-  const welcome = document.getElementById("welcome");
-  if(welcome) welcome.style.display = "none";
-
-  addMessage(message, "user");
-  input.value = "";
-  input.style.height = "24px"; 
-  
-  const botBubble = addMessage("", "bot", true);
-
-  try{
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message })
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+        "Notion-Version": NOTION_VERSION
+      }
     });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Unable to read Notion content.");
+    allBlocks.push(...(data.results || []));
+    cursor = data.next_cursor;
+  } while (cursor);
+  return allBlocks;
+}
 
-    const data = await res.json();
-    const resultText = data.answer || "No answer received.";
+async function readPageContent(pageId, depth = 0) {
+  if (depth > 1) return ""; // Reduced depth to 1 for much faster document building
+  const blocks = await getBlockChildren(pageId);
+  let text = "";
+  for (const block of blocks) {
+    const blockText = blockToText(block);
+    if (blockText) text += blockText + "\n";
+    if (block.has_children) {
+      text += await readPageContent(block.id, depth + 1);
+    }
+  }
+  return text;
+}
+
+async function searchNotionDocuments(query) {
+  const response = await fetch("https://api.notion.com/v1/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
+      "Notion-Version": NOTION_VERSION,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      query,
+      page_size: 3, // Reduced to top 3 matching documents to speed up lookup context
+      filter: { property: "object", value: "page" }
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || "Notion search failed.");
+  if (!data.results?.length) return [];
+
+  const docs = [];
+  for (const page of data.results) {
+    const title = getPageTitle(page);
+    const content = await readPageContent(page.id);
+    docs.push({ title, content });
+  }
+  return docs;
+}
+
+// Low-overhead fallback processing loop using ultra-fast Flash models
+async function askGemini(userMessage, companyKnowledgeContext) {
+  const systemInstruction = `
+    You are the KREHSST Resource Hub Assistant, a professional, supportive HR Copilot. Your goal is to guide employees accurately using the internal company context provided.
+
+    CRITICAL CLEAN-OUTPUT INSTRUCTIONS:
+    1. NO RAW MARKDOWN SYMBOLS: Do not use asterisks (*), underscores (_), or hashes (#) for bolding or bullet points. This avoids layout breakages on the client-side UI.
+    2. CLEAN FORMATTING: Use plain text, emojis, capital letters for headers, and standard hyphens (-) for lists to keep the text visually clean and easy to read.
+    3. NEVER COPY-PASTE RAW TEXT: Do not dump blocks of policy text. Synthesize and summarize clearly.
+    4. WORD LIMIT: Keep your total response under 250 words.
+
+    OUTPUT FORMAT CONDITIONS:
+
+    [IF KEY DETAILS ARE FOUND IN CONTEXT]
+    SOURCE DOCUMENT: [Insert Title Here]
+
+    SUMMARY:
+    - Clear bullet points translating the rule or policy simply.
+
+    ADDITIONAL GUIDANCE: (Optional)
+    - Provide practical industry tips if the policy leaves room for interpretation.
+
+    [IF DETAILS ARE NOT FOUND / CONTEXT IS EMPTY]
+    No exact information was found in KREHSST internal documents.
     
-    // Switch immediately from loader to text stream render
-    streamText(botBubble, resultText);
-
-  } catch(error) {
-    botBubble.innerHTML = "Unable to search knowledge base. Please check deployment/API setup.";
-  }
-}
-
-function handleKey(event){
-  if(event.key === "Enter" && !event.shiftKey){
-    event.preventDefault();
-    ask();
-  }
-}
-
-/* Accelerated Real-Time Voice Transcription Engine */
-function toggleMic() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert("Voice transcription is not supported in this browser.");
-    return;
-  }
-
-  const micBtn = document.getElementById("micBtn");
-  const textarea = document.getElementById("q");
-
-  if (!recognition) {
-    recognition = new SpeechRecognition();
-    recognition.continuous = true;  // Keeps microphone active as long as you speak
-    recognition.interimResults = true; // Displays words instantly while you talk
-    recognition.lang = "en-IN";
-
-    recognition.onstart = () => {
-      isListening = true;
-      micBtn.classList.add("listening");
-      textarea.placeholder = "Listening active... talk now";
-    };
-
-    recognition.onresult = (event) => {
-      let finalTranscript = "";
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          finalTranscript += event.results[i][0].transcript;
-        }
-      }
-      if(finalTranscript) {
-        textarea.value = finalTranscript;
-        autoGrow(textarea);
-      }
-    };
-
-    recognition.onerror = () => { stopMicSession(); };
-    recognition.onend = () => { stopMicSession(); };
-  }
-
-  if (isListening) {
-    recognition.stop();
-  } else {
-    recognition.start();
-  }
-}
-
-function stopMicSession() {
-  isListening = false;
-  const micBtn = document.getElementById("micBtn");
-  const textarea = document.getElementById("q");
-  if(micBtn) micBtn.classList.remove("listening");
-  if(textarea) textarea.placeholder = "Ask anything...";
-}
-
-function newChat(){
-  document.getElementById("chat").innerHTML = `
-    <div class="welcome" id="welcome">
-      <h1>How can I help you?</h1>
-      <p>Ask anything from your internal company resource documents.</p>
-    </div>
+    SUGGESTED EXTERNAL GUIDANCE:
+    - Point 1
+    - Point 2
+    - Point 3
   `;
-  if(window.innerWidth <= 768){
-    document.getElementById("sidebar").classList.remove("open");
-    document.getElementById("overlay").classList.remove("show");
+
+  const prompt = `
+    PROVIDED COMPANY CONTEXT:
+    ${companyKnowledgeContext || "No internal documents found for this query."}
+
+    USER QUERY:
+    "${userMessage}"
+  `;
+
+  // Prioritizing optimized super-fast endpoints to avoid bottlenecking requests
+  const modelsToTry = [
+    "gemini-2.5-flash", 
+    "gemini-1.5-flash"
+  ];
+  
+  for (const modelName of modelsToTry) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
+      // Setting a lower response complexity timeout constraint to speed up generations
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 400 } 
+      });
+      return result.response.text();
+    } catch (error) {
+      console.warn(`Model ${modelName} busy or restricted. Switching instantly...`);
+      continue; // Skips immediately to the next model without waiting
+    }
+  }
+
+  throw new Error("All high-speed generative paths are busy right now.");
+}
+
+export default async function handler(req, res) {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({ answer: "Only POST requests are allowed." });
+    }
+
+    const { message } = req.body;
+    if (!message?.trim()) {
+      return res.status(400).json({ answer: "Please enter a question." });
+    }
+
+    // High speed data gathering from Notion
+    const docs = await searchNotionDocuments(message);
+    const companyKnowledgeContext = docs.length > 0 
+      ? docs.map(doc => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`).join("\n\n").substring(0, 12000)
+      : "";
+
+    const answer = await askGemini(message, companyKnowledgeContext);
+    return res.status(200).json({ answer });
+
+  } catch (error) {
+    return res.status(200).json({ 
+      answer: "KREHSST Assistant is processing alternative routing parameters. Please send your question one more time." 
+    });
   }
 }
-</script>
-
-</body>
-</html>
-
-
-But when I am typing prompts it's only giving The HR Assistant is currently updating its system components. Please refresh and try asking your question again in a moment.
-
-
-Please resolve the issue
