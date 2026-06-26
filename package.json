@@ -1,6 +1,6 @@
 {
   "name": "krehsst-resource-hub-assistant",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
