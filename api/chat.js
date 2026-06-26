@@ -198,53 +198,76 @@ async function askGemini(userMessage, companyKnowledgeContext) {
     return "Hello! 👋 I am your KREHSST Resource Hub Assistant. How can I help you with company policies, guidelines, or HR resource documents today?";
   }
 
-  const systemInstruction = `You are the KREHSST Resource Hub Assistant — a professional, supportive HR Copilot.
+  const systemInstruction = `You are the KREHSST Resource Hub Assistant, a professional and supportive HR Copilot.
 
-CRITICAL FORMATTING RULES:
-1. NO raw Markdown symbols (no *, _, #). Use plain text, emojis, CAPITAL LETTERS for headers, and hyphens (-) for lists.
-2. NEVER dump raw blocks of policy text. Synthesize and summarize clearly.
-3. Keep responses focused and structured.
-4. For document requests (Screening Questions, Interview Questions, Job Descriptions, Policies, SOPs, Templates): Generate the COMPLETE document — never stop midway, never summarize. Always provide every section in full.
-
-WORD LIMIT: 800 words maximum unless the user explicitly requests a full document template, in which case provide everything completely.`;
+STRICT OUTPUT RULES — APPLY TO EVERY RESPONSE:
+1. ZERO special characters. No asterisks, no underscores, no hashes, no backticks, no angle brackets, no bullet symbols. None at all.
+2. Use only plain English text. For lists, start each item on a new line with a number and a dot (1. 2. 3.) or a plain hyphen followed by a space (- item). Nothing else.
+3. Use CAPITAL LETTERS for section headers. No other styling.
+4. Never copy-paste raw document text. Always rewrite in your own words.
+5. Keep language clear, professional, and conversational.`;
 
   const hasContext = companyKnowledgeContext && companyKnowledgeContext.trim().length > 0;
+
+  // Detect if user is explicitly asking for full details, a complete list, or a full document
+  const detailKeywords = [
+    "full", "complete", "all", "detailed", "detail", "every", "entire",
+    "give me", "show me", "list all", "provide all", "generate", "create",
+    "draft", "template", "sop", "job description", "jd", "screening questions",
+    "interview questions", "20", "25", "all questions"
+  ];
+  const wantsFullDetail = detailKeywords.some((kw) =>
+    userMessage.toLowerCase().includes(kw)
+  );
 
   let prompt;
 
   if (hasContext) {
-    prompt = `PROVIDED COMPANY CONTEXT FROM NOTION:
+    if (wantsFullDetail) {
+      prompt = `INTERNAL COMPANY DOCUMENTS:
+${companyKnowledgeContext}
+
+USER REQUEST: "${userMessage}"
+
+The user has asked for full or detailed information. Using ONLY the internal documents above:
+
+1. Start with: SOURCE: [document title]
+2. Provide a thorough, complete answer covering all relevant points from the document.
+3. Organize under CAPITAL LETTER section headers if needed.
+4. Use plain hyphens for list items. No special characters whatsoever.
+5. Do not truncate or summarize. Give everything relevant from the document.`;
+    } else {
+      prompt = `INTERNAL COMPANY DOCUMENTS:
 ${companyKnowledgeContext}
 
 USER QUERY: "${userMessage}"
 
-INSTRUCTIONS:
-Step 1 — The context above has already been verified as relevant to this query.
-Step 2 — Use ONLY the internal context to answer. Begin your response with:
+Using ONLY the internal documents above, give a SHORT SUMMARY answer:
 
-SOURCE DOCUMENT: [Insert the document title(s) from the context]
-
-SUMMARY:
-- Summarize the key points clearly using plain text and hyphens for lists.
-
-ADDITIONAL GUIDANCE:
-- If the policy has room for interpretation, add practical industry tips.`;
+1. Start with: SOURCE: [document title]
+2. Summarize the key answer in 3 to 6 plain sentences or a short list of the most important points.
+3. End with: "For full details, ask me to show the complete policy."
+4. Use plain hyphens for list items. No special characters whatsoever.
+5. Do not dump the full document. Keep it brief and useful.`;
+    }
   } else {
     prompt = `USER QUERY: "${userMessage}"
 
-No relevant internal company documents were found for this query.
+No matching internal company document was found.
 
-INSTRUCTIONS:
-- Begin your response EXACTLY with:
-
+Start your response with exactly this line:
 Data not available in Library, check alternate source below.
 
+Then on the next line write:
 SUGGESTED EXTERNAL GUIDANCE:
 
-- Then act as an expert HR Copilot and provide a COMPLETE, well-structured answer using your broad HR knowledge.
-- If the user asks for Screening Questions, Job Descriptions, Interview Questions, Policies, SOPs, or Templates: Generate the FULL document with ALL sections. Do not abbreviate. Do not stop early. Do not say "and so on" or "etc."
-- Use plain text with CAPITAL HEADERS and hyphens (-) for lists.
-- For CFO or executive-level screening questions: provide at least 20-25 questions organized by category (Leadership, Finance, Compliance, Strategic Planning, Stakeholder Management, Team Management, Capital Allocation, Risk Management).`;
+Then provide a COMPLETE and DETAILED answer using your broad HR expertise:
+- If the user asks for screening questions, interview questions, job descriptions, policies, SOPs, or templates: generate the FULL document. Do not abbreviate. Do not stop early.
+- For executive-level roles like CFO: provide at least 20 to 25 questions grouped by category such as Leadership, Finance, Compliance, Strategic Planning, Stakeholder Management, Team Management, Capital Allocation, and Risk Management.
+- Organize with CAPITAL LETTER section headers.
+- Use plain numbered lists (1. 2. 3.) or hyphens (- item) for all list items.
+- No special characters, no asterisks, no markdown symbols of any kind.
+- Write complete sentences and full content. Never say "and so on" or "etc."`;
   }
 
   const reply = await callGemini(prompt, systemInstruction);
@@ -254,7 +277,7 @@ SUGGESTED EXTERNAL GUIDANCE:
   return `Data not available in Library, check alternate source below.
 
 SUGGESTED EXTERNAL GUIDANCE:
-- The system encountered a temporary issue. Please rephrase your question or contact HR management directly.`;
+The system encountered a temporary issue. Please rephrase your question or contact HR management directly.`;
 }
 
 // ─────────────────────────────────────────────
@@ -301,7 +324,7 @@ export default async function handler(req, res) {
     console.error("Critical System Catch:", error.message);
     return res.status(200).json({
       answer:
-        "Data not available in Library, check alternate source below.\n\nSUGGESTED EXTERNAL GUIDANCE:\n- System is recovering. Please resend your message in a moment.",
+        "Data not available in Library, check alternate source below.\n\nSUGGESTED EXTERNAL GUIDANCE:\nSystem is recovering. Please resend your message in a moment.",
     });
   }
 }
