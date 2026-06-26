@@ -11,48 +11,29 @@ function getPlainText(richText = []) {
   return richText.map((t) => t.plain_text || "").join("");
 }
 
-/**
- * Converts a Notion block to plain text.
- * Supports: paragraph, headings, lists, to_do, toggle, quote, callout, child_page.
- */
 function blockToText(block) {
   const type = block.type;
   const data = block[type];
   if (!data) return "";
 
   const RICH_TEXT_TYPES = [
-    "paragraph",
-    "heading_1",
-    "heading_2",
-    "heading_3",
-    "bulleted_list_item",
-    "numbered_list_item",
-    "to_do",
-    "toggle",
-    "quote",
-    "callout",
+    "paragraph","heading_1","heading_2","heading_3",
+    "bulleted_list_item","numbered_list_item",
+    "to_do","toggle","quote","callout",
   ];
 
   if (RICH_TEXT_TYPES.includes(type) && data.rich_text) {
     const prefix =
-      type === "bulleted_list_item"
-        ? "- "
-        : type === "numbered_list_item"
-        ? "• "
-        : type === "to_do"
-        ? (data.checked ? "[x] " : "[ ] ")
-        : type === "heading_1"
-        ? "# "
-        : type === "heading_2"
-        ? "## "
-        : type === "heading_3"
-        ? "### "
-        : "";
+      type === "bulleted_list_item" ? "- " :
+      type === "numbered_list_item" ? "• " :
+      type === "to_do" ? (data.checked ? "[x] " : "[ ] ") :
+      type === "heading_1" ? "# " :
+      type === "heading_2" ? "## " :
+      type === "heading_3" ? "### " : "";
     return prefix + getPlainText(data.rich_text);
   }
 
   if (type === "child_page") return data.title || "";
-
   return "";
 }
 
@@ -70,12 +51,9 @@ async function getBlockChildren(blockId) {
   let allBlocks = [];
   let cursor;
   do {
-    const url = new URL(
-      `https://api.notion.com/v1/blocks/${blockId}/children`
-    );
+    const url = new URL(`https://api.notion.com/v1/blocks/${blockId}/children`);
     url.searchParams.set("page_size", "100");
     if (cursor) url.searchParams.set("start_cursor", cursor);
-
     const response = await fetch(url.toString(), {
       method: "GET",
       headers: {
@@ -105,10 +83,6 @@ async function readPageContent(pageId, depth = 0) {
   return text;
 }
 
-/**
- * Searches Notion for pages matching the query.
- * Returns up to 10 results with title + content (each capped at 1500 chars).
- */
 async function searchNotionDocuments(query) {
   try {
     const response = await fetch("https://api.notion.com/v1/search", {
@@ -124,15 +98,12 @@ async function searchNotionDocuments(query) {
         filter: { property: "object", value: "page" },
       }),
     });
-
     const data = await response.json();
     if (!response.ok || !data.results?.length) return [];
-
     const docs = [];
     for (const page of data.results) {
       const title = getPageTitle(page);
       const rawContent = await readPageContent(page.id);
-      // Cap each document at 1500 chars so context stays manageable
       const content = rawContent.substring(0, 1500);
       docs.push({ title, content });
     }
@@ -147,11 +118,26 @@ async function searchNotionDocuments(query) {
 // GEMINI UTILITIES
 // ─────────────────────────────────────────────
 
-const MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"];
+// Model cascade — newest preferred, proven stable models as fallback
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-pro",
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-pro",
+];
 
 async function callGemini(prompt, systemInstruction) {
+  if (!process.env.GEMINI_API_KEY) {
+    console.error("CRITICAL: GEMINI_API_KEY is not set in environment variables.");
+    return null;
+  }
+
+  let lastError = "";
+
   for (const modelName of MODELS) {
     try {
+      console.log(`[Gemini] Trying model: ${modelName}`);
       const model = genAI.getGenerativeModel({ model: modelName });
       const result = await model.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -162,18 +148,30 @@ async function callGemini(prompt, systemInstruction) {
         },
       });
       const reply = result?.response?.text();
-      if (reply && reply.trim().length > 0) return reply;
+      if (reply && reply.trim().length > 0) {
+        console.log(`[Gemini] Success: ${modelName} | reply length: ${reply.length}`);
+        return reply;
+      }
+      console.warn(`[Gemini] ${modelName} returned empty response.`);
     } catch (error) {
-      console.warn(`Model ${modelName} failed:`, error.message);
+      lastError = error.message;
+      console.error(`[Gemini] ${modelName} failed:`, error.message);
+      // Auth errors: no point trying other models
+      if (
+        error.message?.includes("API_KEY_INVALID") ||
+        error.message?.includes("API key not valid") ||
+        error.message?.includes("PERMISSION_DENIED")
+      ) {
+        console.error("[Gemini] Auth failure — stopping cascade. Check GEMINI_API_KEY.");
+        return null;
+      }
     }
   }
+
+  console.error("[Gemini] All models failed. Last error:", lastError);
   return null;
 }
 
-/**
- * Uses Gemini to check if any retrieved docs actually answer the user's query.
- * Returns true if relevant, false otherwise.
- */
 async function isContextRelevant(userMessage, docsContext) {
   const relevancePrompt = `User Query: "${userMessage}"
 
@@ -187,20 +185,16 @@ Reply with only YES or NO. Nothing else.`;
   return reply?.trim().toUpperCase().startsWith("YES") ?? false;
 }
 
-/**
- * Main Gemini call that generates the final HR assistant answer.
- */
 async function askGemini(userMessage, companyKnowledgeContext) {
-  // Fast greeting shortcut
   const cleanMsg = userMessage.toLowerCase().trim();
   const greetings = ["hello", "hi", "hey", "good morning", "good afternoon", "sup", "yo", "test"];
   if (greetings.includes(cleanMsg) || cleanMsg.length <= 3) {
-    return "Hello! 👋 I am your KREHSST Resource Hub Assistant. How can I help you with company policies, guidelines, or HR resource documents today?";
+    return "Hello! I am your KREHSST Resource Hub Assistant. How can I help you with company policies, guidelines, or HR resource documents today?";
   }
 
   const systemInstruction = `You are the KREHSST Resource Hub Assistant, a professional and supportive HR Copilot.
 
-STRICT OUTPUT RULES — APPLY TO EVERY RESPONSE:
+STRICT OUTPUT RULES - APPLY TO EVERY RESPONSE:
 1. ZERO special characters. No asterisks, no underscores, no hashes, no backticks, no angle brackets, no bullet symbols. None at all.
 2. Use only plain English text. For lists, start each item on a new line with a number and a dot (1. 2. 3.) or a plain hyphen followed by a space (- item). Nothing else.
 3. Use CAPITAL LETTERS for section headers. No other styling.
@@ -209,12 +203,11 @@ STRICT OUTPUT RULES — APPLY TO EVERY RESPONSE:
 
   const hasContext = companyKnowledgeContext && companyKnowledgeContext.trim().length > 0;
 
-  // Detect if user is explicitly asking for full details, a complete list, or a full document
   const detailKeywords = [
-    "full", "complete", "all", "detailed", "detail", "every", "entire",
-    "give me", "show me", "list all", "provide all", "generate", "create",
-    "draft", "template", "sop", "job description", "jd", "screening questions",
-    "interview questions", "20", "25", "all questions"
+    "full","complete","all","detailed","detail","every","entire",
+    "give me","show me","list all","provide all","generate","create",
+    "draft","template","sop","job description","jd","screening questions",
+    "interview questions","20","25","all questions",
   ];
   const wantsFullDetail = detailKeywords.some((kw) =>
     userMessage.toLowerCase().includes(kw)
@@ -274,10 +267,12 @@ Then provide a COMPLETE and DETAILED answer using your broad HR expertise:
 
   if (reply) return reply;
 
-  return `Data not available in Library, check alternate source below.
+  // If Gemini failed entirely, surface the diagnostic message
+  if (!process.env.GEMINI_API_KEY) {
+    return "Configuration error: GEMINI_API_KEY is missing from your environment variables. Please add it in your Vercel project settings under Settings > Environment Variables.";
+  }
 
-SUGGESTED EXTERNAL GUIDANCE:
-The system encountered a temporary issue. Please rephrase your question or contact HR management directly.`;
+  return "The AI service is temporarily unavailable. All models were tried and failed. Please check your Vercel logs for [Gemini] error messages to diagnose the issue, then try again.";
 }
 
 // ─────────────────────────────────────────────
@@ -295,36 +290,39 @@ export default async function handler(req, res) {
       return res.status(400).json({ answer: "Please enter a question." });
     }
 
+    // Log env presence (never log the key itself)
+    console.log("[Handler] GEMINI_API_KEY present:", !!process.env.GEMINI_API_KEY);
+    console.log("[Handler] NOTION_API_KEY present:", !!process.env.NOTION_API_KEY);
+
     // Step 1: Search Notion
     const docs = await searchNotionDocuments(message);
-    console.log("DOCUMENTS FOUND:", docs.length);
+    console.log("[Handler] DOCUMENTS FOUND:", docs.length);
 
-    // Step 2: Build raw context string
+    // Step 2: Build context string
     const rawContext = docs
       .slice(0, 5)
       .map((doc) => `DOCUMENT TITLE: ${doc.title}\nCONTENT:\n${doc.content}`)
       .join("\n\n");
 
-    // Step 3: Relevance check — only if we actually got documents
+    // Step 3: Relevance check
     let companyKnowledgeContext = "";
     if (docs.length > 0) {
       const relevant = await isContextRelevant(message, rawContext);
-      console.log("CONTEXT RELEVANT:", relevant);
+      console.log("[Handler] CONTEXT RELEVANT:", relevant);
       if (relevant) {
         companyKnowledgeContext = rawContext;
       }
     }
 
-    // Step 4: Generate final answer
+    // Step 4: Generate answer
     const answer = await askGemini(message, companyKnowledgeContext);
-    console.log("ANSWER LENGTH:", answer.length);
+    console.log("[Handler] ANSWER LENGTH:", answer.length);
 
     return res.status(200).json({ answer });
   } catch (error) {
-    console.error("Critical System Catch:", error.message);
+    console.error("[Handler] Critical error:", error.message, error.stack);
     return res.status(200).json({
-      answer:
-        "Data not available in Library, check alternate source below.\n\nSUGGESTED EXTERNAL GUIDANCE:\nSystem is recovering. Please resend your message in a moment.",
+      answer: `A critical server error occurred: ${error.message}. Please check your Vercel function logs for full details.`,
     });
   }
 }
