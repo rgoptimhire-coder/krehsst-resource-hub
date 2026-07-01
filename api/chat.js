@@ -10,59 +10,12 @@ const MODELS = [
   "gemini-2.5-pro"
 ];
 
-// ─────────────────────────────────────────────
-// NOTION UTILITIES
-// ─────────────────────────────────────────────
+// ======================
+// NOTION HELPERS
+// ======================
 
 function getPlainText(richText = []) {
-  return richText.map((t) => t.plain_text || "").join("");
-}
-
-function blockToText(block) {
-  const type = block.type;
-  const data = block[type];
-
-  if (!data) return "";
-
-  const RICH_TEXT_TYPES = [
-    "paragraph",
-    "heading_1",
-    "heading_2",
-    "heading_3",
-    "bulleted_list_item",
-    "numbered_list_item",
-    "to_do",
-    "toggle",
-    "quote",
-    "callout"
-  ];
-
-  if (RICH_TEXT_TYPES.includes(type) && data.rich_text) {
-    const prefix =
-      type === "bulleted_list_item"
-        ? "- "
-        : type === "numbered_list_item"
-        ? "• "
-        : type === "to_do"
-        ? data.checked
-          ? "[x] "
-          : "[ ] "
-        : type === "heading_1"
-        ? "# "
-        : type === "heading_2"
-        ? "## "
-        : type === "heading_3"
-        ? "### "
-        : "";
-
-    return prefix + getPlainText(data.rich_text);
-  }
-
-  if (type === "child_page") {
-    return data.title || "";
-  }
-
-  return "";
+  return richText.map(t => t.plain_text || "").join("");
 }
 
 function getPageTitle(page) {
@@ -77,9 +30,22 @@ function getPageTitle(page) {
   return "Untitled";
 }
 
+function blockToText(block) {
+  const type = block.type;
+  const data = block[type];
+
+  if (!data) return "";
+
+  if (data.rich_text) {
+    return getPlainText(data.rich_text);
+  }
+
+  return "";
+}
+
 async function getBlockChildren(blockId) {
-  let allBlocks = [];
-  let cursor;
+  let blocks = [];
+  let cursor = null;
 
   do {
     const url = new URL(
@@ -93,7 +59,6 @@ async function getBlockChildren(blockId) {
     }
 
     const response = await fetch(url.toString(), {
-      method: "GET",
       headers: {
         Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
         "Notion-Version": NOTION_VERSION
@@ -103,36 +68,34 @@ async function getBlockChildren(blockId) {
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || "Unable to read Notion content.");
+      console.error("NOTION BLOCK ERROR:", data);
+      throw new Error(data.message || "Notion block read failed");
     }
 
-    allBlocks.push(...(data.results || []));
+    blocks.push(...data.results);
+
     cursor = data.next_cursor;
   } while (cursor);
 
-  return allBlocks;
+  return blocks;
 }
 
-async function readPageContent(pageId, depth = 0) {
+async function readPageContent(blockId, depth = 0) {
   if (depth > 2) return "";
 
-  const blocks = await getBlockChildren(pageId);
+  let content = "";
 
-  let text = "";
+  const blocks = await getBlockChildren(blockId);
 
   for (const block of blocks) {
-    const blockText = blockToText(block);
-
-    if (blockText) {
-      text += blockText + "\n";
-    }
+    content += blockToText(block) + "\n";
 
     if (block.has_children) {
-      text += await readPageContent(block.id, depth + 1);
+      content += await readPageContent(block.id, depth + 1);
     }
   }
 
-  return text;
+  return content;
 }
 
 async function searchNotionDocuments(query) {
@@ -164,19 +127,15 @@ async function searchNotionDocuments(query) {
       return [];
     }
 
-    if (!data.results?.length) {
-      return [];
-    }
-
     const docs = [];
 
-    for (const page of data.results) {
+    for (const page of data.results || []) {
       try {
+        const content = await readPageContent(page.id);
+
         docs.push({
           title: getPageTitle(page),
-          content: (
-            await readPageContent(page.id)
-          ).substring(0, 1500)
+          content: content.substring(0, 1500)
         });
       } catch (err) {
         console.error("PAGE READ ERROR:", err);
@@ -185,43 +144,37 @@ async function searchNotionDocuments(query) {
 
     return docs;
   } catch (err) {
-    console.error("NOTION API ERROR:", err);
+    console.error("NOTION SEARCH FAILED:", err);
     return [];
   }
 }
 
-// ─────────────────────────────────────────────
-// GEMINI UTILITIES
-// ─────────────────────────────────────────────
+// ======================
+// GEMINI HELPERS
+// ======================
 
-async function callGemini(prompt, systemInstruction) {
+async function callGemini(prompt, systemInstruction = "") {
   for (const modelName of MODELS) {
     try {
+      console.log(`Trying Gemini Model: ${modelName}`);
+
       const model = genAI.getGenerativeModel({
-        model: modelName
+        model: modelName,
+        systemInstruction
       });
 
-      const result = await model.generateContent({
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: prompt }]
-          }
-        ],
-        systemInstruction,
-        generationConfig: {
-          maxOutputTokens: 4096,
-          temperature: 0.3
-        }
-      });
+      const result = await model.generateContent(prompt);
 
-      const reply = result?.response?.text();
+      const text = result.response.text();
 
-      if (reply?.trim()) {
-        return reply;
+      console.log(`SUCCESS: ${modelName}`);
+
+      if (text?.trim()) {
+        return text;
       }
-    } catch (error) {
-      console.error(`MODEL FAILED: ${modelName}`, error);
+    } catch (err) {
+      console.error(`FAILED MODEL: ${modelName}`);
+      console.error(err);
     }
   }
 
@@ -229,130 +182,129 @@ async function callGemini(prompt, systemInstruction) {
 }
 
 async function isContextRelevant(userMessage, docsContext) {
-  const reply = await callGemini(
-    `User Query: "${userMessage}"
+  const response = await callGemini(
+    `
+User Query:
+${userMessage}
+
 Documents:
 ${docsContext}
 
-Does this answer the query?
-
-Reply only YES or NO.`,
+Reply ONLY YES or NO.
+`,
     "Reply only YES or NO."
   );
 
-  return reply?.trim().toUpperCase().startsWith("YES") ?? false;
+  return response?.trim().toUpperCase().startsWith("YES");
 }
 
-async function askGemini(userMessage, companyKnowledgeContext) {
-  const cleanMsg = userMessage.toLowerCase().trim();
+async function askGemini(userMessage, companyContext) {
+  const prompt =
+    companyContext && companyContext.length > 0
+      ? `
+INTERNAL KNOWLEDGE:
 
-  if (
-    ["hi", "hello", "hey", "test"].includes(cleanMsg) ||
-    cleanMsg.length <= 3
-  ) {
-    return "Hello. I am your KREHSST Resource Hub Assistant. How can I help you today?";
-  }
+${companyContext}
 
-  const systemInstruction =
-    "You are a professional HR Copilot. RULES: 1. NO special characters. 2. Use plain text. 3. Use CAPITAL LETTERS for headers. 4. Use hyphens for lists. 5. Provide complete answers.";
-
-  const hasContext =
-    companyKnowledgeContext &&
-    companyKnowledgeContext.trim().length > 0;
-
-  const prompt = hasContext
-    ? `CONTEXT:
-${companyKnowledgeContext}
-
-QUERY:
+QUESTION:
 ${userMessage}
 
-Answer using the provided context. Start with SOURCE: [title].`
-    : `QUERY:
+Answer using the internal knowledge first.
+`
+      : `
+QUESTION:
 ${userMessage}
 
-No internal documents found.
+No internal knowledge found.
+Provide a professional HR response.
+`;
 
-Start with:
-Data not available in Library, check alternate source below.
-
-Then provide a professional HR response.`;
-
-  const reply = await callGemini(
+  const answer = await callGemini(
     prompt,
-    systemInstruction
+    "You are KREHSST Resource Hub HR Assistant."
   );
 
-  return (
-    reply ||
-    "Data not available in Library, check alternate source below.\nSystem is currently unavailable. Please try again later."
-  );
+  return answer;
 }
 
-// ─────────────────────────────────────────────
+// ======================
 // API HANDLER
-// ─────────────────────────────────────────────
+// ======================
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      answer: "Method not allowed."
-    });
-  }
-
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({
-        answer: "GEMINI_API_KEY environment variable is missing."
+    if (req.method !== "POST") {
+      return res.status(405).json({
+        answer: "Method not allowed."
       });
     }
 
-    if (!process.env.NOTION_API_KEY) {
+    console.log(
+      "GEMINI KEY EXISTS:",
+      !!process.env.GEMINI_API_KEY
+    );
+
+    console.log(
+      "NOTION KEY EXISTS:",
+      !!process.env.NOTION_API_KEY
+    );
+
+    if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
-        answer: "NOTION_API_KEY environment variable is missing."
+        answer: "Missing GEMINI_API_KEY."
       });
     }
 
     const { message } = req.body;
 
-    if (!message?.trim()) {
+    if (!message) {
       return res.status(400).json({
         answer: "Please enter a question."
       });
     }
 
-    const docs = await searchNotionDocuments(message);
-
     let context = "";
 
-    if (docs.length > 0) {
-      const raw = docs
-        .slice(0, 5)
-        .map(
-          (d) =>
-            `TITLE: ${d.title}\nCONTENT: ${d.content}`
-        )
-        .join("\n\n");
+    if (process.env.NOTION_API_KEY) {
+      const docs = await searchNotionDocuments(message);
 
-      if (await isContextRelevant(message, raw)) {
-        context = raw;
+      if (docs.length > 0) {
+        const combined = docs
+          .slice(0, 5)
+          .map(
+            d =>
+              `TITLE: ${d.title}\nCONTENT:\n${d.content}`
+          )
+          .join("\n\n");
+
+        const relevant = await isContextRelevant(
+          message,
+          combined
+        );
+
+        if (relevant) {
+          context = combined;
+        }
       }
     }
 
-    const answer = await askGemini(
-      message,
-      context
-    );
+    const answer = await askGemini(message, context);
+
+    if (!answer) {
+      return res.status(500).json({
+        answer:
+          "Gemini did not return a response. Check Vercel Function Logs."
+      });
+    }
 
     return res.status(200).json({
       answer
     });
-  } catch (error) {
-    console.error("SERVER ERROR:", error);
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
 
     return res.status(500).json({
-      answer:
-        "System error occurred. Please check Vercel logs."
+      answer: `Server Error: ${err.message}`
     });
   }
 }
